@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
       console.error('Database error:', dbError);
       return Response.json({ 
         error: 'Database error while storing document',
-        details: dbError.message 
+        details: dbError instanceof Error ? dbError.message : 'Unknown database error'
       }, { status: 500 });
     }
 
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
     console.error('Upload processing error:', error);
     return Response.json({ 
       error: 'Failed to process uploaded file',
-      details: error.message 
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }

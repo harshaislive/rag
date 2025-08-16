@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     console.error('Simple upload error:', error);
     return Response.json({ 
       error: 'Failed to process uploaded file',
-      details: error.message 
+      details: error instanceof Error ? error.message : 'Unknown error'
     }, { status: 500 });
   }
 }

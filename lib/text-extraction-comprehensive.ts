@@ -1,8 +1,14 @@
 import mammoth from 'mammoth';
 import * as xlsx from 'xlsx';
 
-// Import pdf2json with proper typing
-const PDFParser = require('pdf2json');
+// Import pdf2json with proper typing - handle build-time issues
+let PDFParser: any;
+try {
+  PDFParser = require('pdf2json');
+} catch (error) {
+  console.warn('pdf2json not available during build');
+  PDFParser = null;
+}
 
 interface ExtractionResult {
   text: string;
@@ -85,12 +91,16 @@ export async function extractTextFromFile(file: File): Promise<ExtractionResult>
     }
   } catch (error) {
     console.error('Text extraction failed:', error);
-    throw new Error(`Failed to extract text from ${file.name}: ${error.message}`);
+    throw new Error(`Failed to extract text from ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 
 // PDF Extraction using pdf2json
 async function extractFromPDF(buffer: Buffer): Promise<ExtractionResult> {
+  if (!PDFParser) {
+    throw new Error('PDF parsing not available - pdf2json not loaded');
+  }
+  
   return new Promise((resolve, reject) => {
     const pdfParser = new PDFParser(null, true);
     
@@ -122,7 +132,7 @@ async function extractFromPDF(buffer: Buffer): Promise<ExtractionResult> {
           }
         });
       } catch (error) {
-        reject(new Error(`Error processing PDF data: ${error.message}`));
+        reject(new Error(`Error processing PDF data: ${error instanceof Error ? error.message : 'Unknown error'}`));
       }
     });
     

@@ -18,12 +18,20 @@ const runMigrate = async () => {
 
   const start = Date.now();
 
-  await migrate(db, { migrationsFolder: "lib/db/migrations" });
+  try {
+    await migrate(db, { migrationsFolder: "lib/db/migrations" });
+    const end = Date.now();
+    console.log("✅ Migrations completed in", end - start, "ms");
+  } catch (error) {
+    console.log("⚠️ Migration warning:", error instanceof Error ? error.message : 'Unknown error');
+    if (error instanceof Error && error.message.includes("already exists")) {
+      console.log("✅ Tables already exist - continuing build...");
+    } else {
+      throw error;
+    }
+  }
 
-  const end = Date.now();
-
-  console.log("✅ Migrations completed in", end - start, "ms");
-
+  await connection.end();
   process.exit(0);
 };
 

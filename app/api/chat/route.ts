@@ -31,7 +31,15 @@ If you can't find relevant information, let the user know and offer to help in o
         parameters: z.object({
           content: z.string().describe("The content or resource to add to the knowledge base"),
         }),
-        execute: async ({ content }) => await createResource({ content }),
+        execute: async ({ content }) => await createResource({ 
+          content,
+          bucketId: 'default-bucket',
+          fileName: `chat-${Date.now()}.txt`,
+          fileType: 'txt',
+          fileSize: Buffer.byteLength(content, 'utf8'),
+          chunkIndex: 0,
+          totalChunks: 1
+        }),
       }),
       getInformation: tool({
         description: `Search your knowledge base to find relevant information for answering questions`,

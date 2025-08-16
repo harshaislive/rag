@@ -1,4 +1,11 @@
-import pdfParse from 'pdf-parse';
+// Handle pdf-parse import for build compatibility
+let pdfParse: any;
+try {
+  pdfParse = require('pdf-parse');
+} catch (error) {
+  console.warn('pdf-parse not available during build');
+  pdfParse = null;
+}
 import mammoth from 'mammoth';
 
 export async function extractTextFromFile(file: File): Promise<string> {
@@ -11,6 +18,9 @@ export async function extractTextFromFile(file: File): Promise<string> {
   try {
     if (fileType === 'application/pdf' || fileName.endsWith('.pdf')) {
       // Extract text from PDF
+      if (!pdfParse) {
+        throw new Error('PDF parsing not available - pdf-parse not loaded');
+      }
       const data = await pdfParse(buffer);
       return data.text;
     } 
@@ -37,7 +47,7 @@ export async function extractTextFromFile(file: File): Promise<string> {
     }
   } catch (error) {
     console.error('Text extraction failed:', error);
-    throw new Error(`Failed to extract text from ${file.name}: ${error.message}`);
+    throw new Error(`Failed to extract text from ${file.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
 

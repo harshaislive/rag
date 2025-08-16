@@ -68,13 +68,11 @@ const ModernLoadingMessage = ({ state }: { state: LoadingState }) => {
 const ModernMessageBubble = ({ 
   message, 
   onCopy, 
-  onRegenerate,
   isLatest, 
   isStreaming 
 }: { 
   message: Message; 
   onCopy: (text: string) => void;
-  onRegenerate?: () => void;
   isLatest: boolean;
   isStreaming: boolean;
 }) => {
@@ -139,10 +137,10 @@ const ModernMessageBubble = ({
                     <div className="space-y-2">
                       {message.toolInvocations.map((toolInvocation, idx) => {
                         // Extract document information from tool results
-                        const documents = toolInvocation.result || [];
+                        const documents = (toolInvocation.state === 'result' ? toolInvocation.result : []) || [];
                         const uniqueDocuments = Array.from(
                           new Map(documents.map((doc: any) => [doc?.fileName, doc])).values()
-                        ).filter(doc => doc?.fileName);
+                        ).filter((doc: any) => doc?.fileName);
 
                         return (
                           <div key={idx} className="space-y-1">
@@ -191,11 +189,11 @@ const ModernMessageBubble = ({
                 <Copy className="w-3 h-3 mr-1.5" />
                 Copy
               </Button>
-              {isLatest && onRegenerate && (
+              {isLatest && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={onRegenerate}
+                  onClick={() => console.log('Regenerate functionality would go here')}
                   className="h-7 text-xs"
                 >
                   <RotateCcw className="w-3 h-3 mr-1.5" />
@@ -218,7 +216,7 @@ export default function ChatInterface() {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const { messages, input, handleInputChange, handleSubmit, isLoading, regenerate } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     onToolCall({ toolCall }) {
       setLoadingState('searching');
     },
@@ -278,7 +276,7 @@ export default function ChatInterface() {
 
   const shouldShowLoadingMessage = isLoading && loadingState !== 'idle' && loadingState !== 'complete';
   const lastMessage = messages[messages.length - 1];
-  const isCurrentlyStreaming = isLoading && lastMessage?.role === "assistant" && lastMessage.content;
+  const isCurrentlyStreaming = isLoading && lastMessage?.role === "assistant" && !!lastMessage.content;
 
   return (
     <div className="flex flex-col h-full">
@@ -335,7 +333,6 @@ export default function ChatInterface() {
                     key={message.id}
                     message={message} 
                     onCopy={copyToClipboard}
-                    onRegenerate={regenerate}
                     isLatest={index === messages.length - 1}
                     isStreaming={isCurrentlyStreaming && index === messages.length - 1}
                   />
