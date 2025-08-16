@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,7 +64,7 @@ export default function KnowledgeGarden() {
   const [isDragOver, setIsDragOver] = useState(false);
 
   // Fetch buckets from database
-  const fetchBuckets = async () => {
+  const fetchBuckets = useCallback(async () => {
     try {
       const response = await fetch('/api/buckets');
       if (response.ok) {
@@ -78,7 +78,7 @@ export default function KnowledgeGarden() {
       console.error('Error fetching buckets:', error);
       toast.error('Failed to load knowledge buckets');
     }
-  };
+  }, [activeBucket]);
 
   // Fetch documents for active bucket
   const fetchDocuments = async (bucketId: string) => {
@@ -103,7 +103,7 @@ export default function KnowledgeGarden() {
       setLoading(false);
     };
     loadData();
-  }, []);
+  }, [fetchBuckets]);
 
   useEffect(() => {
     if (activeBucket) {

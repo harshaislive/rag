@@ -31,22 +31,51 @@ export default function KnowledgeGarden() {
     setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    
-    const droppedFiles = Array.from(e.dataTransfer.files);
-    processFiles(droppedFiles);
+  const simulateProcessing = useCallback((fileId: string) => {
+    const processingInterval = setInterval(() => {
+      setFiles(prev => prev.map(file => {
+        if (file.id === fileId && file.status === 'processing') {
+          const newProgress = Math.min(file.progress + 15, 100);
+          if (newProgress === 100) {
+            clearInterval(processingInterval);
+            setTimeout(() => {
+              setFiles(prev => prev.map(f => 
+                f.id === fileId ? { ...f, status: 'completed' } : f
+              ));
+            }, 500);
+            return { ...file, progress: newProgress };
+          }
+          return { ...file, progress: newProgress };
+        }
+        return file;
+      }));
+    }, 400);
   }, []);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const selectedFiles = Array.from(e.target.files);
-      processFiles(selectedFiles);
-    }
-  }, []);
+  const simulateFileProcessing = useCallback((fileId: string) => {
+    // Simulate upload progress
+    const uploadInterval = setInterval(() => {
+      setFiles(prev => prev.map(file => {
+        if (file.id === fileId && file.status === 'uploading') {
+          const newProgress = Math.min(file.progress + 20, 100);
+          if (newProgress === 100) {
+            clearInterval(uploadInterval);
+            setTimeout(() => {
+              setFiles(prev => prev.map(f => 
+                f.id === fileId ? { ...f, status: 'processing', progress: 0 } : f
+              ));
+              simulateProcessing(fileId);
+            }, 500);
+            return { ...file, progress: newProgress };
+          }
+          return { ...file, progress: newProgress };
+        }
+        return file;
+      }));
+    }, 300);
+  }, [simulateProcessing]);
 
-  const processFiles = (fileList: File[]) => {
+  const processFiles = useCallback((fileList: File[]) => {
     const supportedTypes = ['.pdf', '.doc', '.docx', '.txt'];
     
     fileList.forEach((file) => {
@@ -68,51 +97,22 @@ export default function KnowledgeGarden() {
         simulateFileProcessing(newFile.id);
       }
     });
-  };
+  }, [simulateFileProcessing]);
 
-  const simulateFileProcessing = (fileId: string) => {
-    // Simulate upload progress
-    const uploadInterval = setInterval(() => {
-      setFiles(prev => prev.map(file => {
-        if (file.id === fileId && file.status === 'uploading') {
-          const newProgress = Math.min(file.progress + 20, 100);
-          if (newProgress === 100) {
-            clearInterval(uploadInterval);
-            setTimeout(() => {
-              setFiles(prev => prev.map(f => 
-                f.id === fileId ? { ...f, status: 'processing', progress: 0 } : f
-              ));
-              simulateProcessing(fileId);
-            }, 500);
-            return { ...file, progress: newProgress };
-          }
-          return { ...file, progress: newProgress };
-        }
-        return file;
-      }));
-    }, 300);
-  };
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    processFiles(droppedFiles);
+  }, [processFiles]);
 
-  const simulateProcessing = (fileId: string) => {
-    const processingInterval = setInterval(() => {
-      setFiles(prev => prev.map(file => {
-        if (file.id === fileId && file.status === 'processing') {
-          const newProgress = Math.min(file.progress + 15, 100);
-          if (newProgress === 100) {
-            clearInterval(processingInterval);
-            setTimeout(() => {
-              setFiles(prev => prev.map(f => 
-                f.id === fileId ? { ...f, status: 'completed' } : f
-              ));
-            }, 500);
-            return { ...file, progress: newProgress };
-          }
-          return { ...file, progress: newProgress };
-        }
-        return file;
-      }));
-    }, 400);
-  };
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const selectedFiles = Array.from(e.target.files);
+      processFiles(selectedFiles);
+    }
+  }, [processFiles]);
 
   const removeFile = (fileId: string) => {
     setFiles(prev => prev.filter(file => file.id !== fileId));
