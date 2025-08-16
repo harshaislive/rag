@@ -112,8 +112,24 @@ const ModernMessageBubble = ({
               <p className="text-sm leading-relaxed">{message.content}</p>
             ) : (
               <>
-                <div className="prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-p:m-0">
-                  <MemoizedMarkdown>{message.content}</MemoizedMarkdown>
+                <div className="prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-p:mb-3 prose-p:mt-0 prose-li:my-1 prose-ul:my-2 prose-ol:my-2">
+                  <MemoizedMarkdown
+                    components={{
+                      p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+                      ul: ({ children }) => <ul className="mb-3 space-y-1">{children}</ul>,
+                      ol: ({ children }) => <ol className="mb-3 space-y-1">{children}</ol>,
+                      li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                      h1: ({ children }) => <h1 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{children}</h1>,
+                      h2: ({ children }) => <h2 className="text-base font-semibold mb-2 mt-3 first:mt-0">{children}</h2>,
+                      h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h3>,
+                      strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                      code: ({ children }) => <code className="bg-muted px-1 py-0.5 rounded text-sm">{children}</code>,
+                      pre: ({ children }) => <pre className="bg-muted p-3 rounded-md overflow-x-auto mb-3">{children}</pre>,
+                      blockquote: ({ children }) => <blockquote className="border-l-4 border-muted-foreground/20 pl-4 italic my-3">{children}</blockquote>,
+                    }}
+                  >
+                    {message.content}
+                  </MemoizedMarkdown>
                   {isStreaming && (
                     <motion.span 
                       className="inline-block w-0.5 h-4 bg-primary ml-1 align-text-bottom"
