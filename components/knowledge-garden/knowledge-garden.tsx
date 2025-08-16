@@ -20,6 +20,7 @@ import {
   Search,
   MoreHorizontal,
   CloudUpload,
+  Trash2,
   Database,
   Folder,
   X
@@ -209,6 +210,39 @@ export default function KnowledgeGarden() {
     }
   };
 
+  const deleteDocument = async (documentId: string, fileName: string) => {
+    if (!confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(`Successfully deleted ${fileName}`);
+        
+        // Remove document from local state
+        setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+        
+        // Update bucket document count
+        setBuckets(prev => prev.map(bucket => 
+          bucket.id === activeBucket 
+            ? { ...bucket, documentCount: Math.max(0, bucket.documentCount - 1) }
+            : bucket
+        ));
+      } else {
+        const error = await response.json();
+        toast.error(`Failed to delete ${fileName}: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      toast.error(`Failed to delete ${fileName}`);
+    }
+  };
+
   const createBucket = async () => {
     if (!newBucket.name.trim()) {
       toast.error('Please enter a bucket name');
@@ -234,6 +268,40 @@ export default function KnowledgeGarden() {
       toast.error('Failed to create bucket');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const deleteBucket = async (bucketId: string, bucketName: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent bucket selection when clicking delete
+    
+    if (!confirm(`Are you sure you want to delete bucket "${bucketName}"? This will permanently delete all documents in this bucket. This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/buckets/${bucketId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        toast.success(`Successfully deleted bucket "${bucketName}" and ${data.deletedResources} documents`);
+        
+        // Remove bucket from local state
+        setBuckets(prev => prev.filter(bucket => bucket.id !== bucketId));
+        
+        // Clear active bucket if it was the deleted one
+        if (activeBucket === bucketId) {
+          setActiveBucket('');
+          setDocuments([]);
+        }
+      } else {
+        const error = await response.json();
+        toast.error(`Failed to delete bucket: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting bucket:', error);
+      toast.error(`Failed to delete bucket "${bucketName}"`);
     }
   };
 
@@ -370,7 +438,7 @@ export default function KnowledgeGarden() {
                     <motion.div 
                       key={bucket.id}
                       className={cn(
-                        "flex items-start gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg cursor-pointer transition-all duration-200",
+                        "flex items-start gap-2 sm:gap-3 p-3 sm:p-4 rounded-lg cursor-pointer transition-all duration-200 group",
                         activeBucket === bucket.id 
                           ? "bg-primary/10 border border-primary/20 shadow-sm" 
                           : "hover:bg-muted/50 hover:border hover:border-primary/10"
@@ -399,9 +467,19 @@ export default function KnowledgeGarden() {
                           </p>
                         )}
                       </div>
-                      <Badge variant="secondary" className="text-xs">
-                        {bucket.documentCount}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-xs">
+                          {bucket.documentCount}
+                        </Badge>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={(e) => deleteBucket(bucket.id, bucket.name, e)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </motion.div>
                   ))}
                 </div>
@@ -494,8 +572,14 @@ export default function KnowledgeGarden() {
                             {getStatusIcon(doc.status)}
                             {doc.status}
                           </Badge>
-                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                            <MoreHorizontal className="h-3 w-3" />
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => deleteDocument(doc.id, doc.name)}
+                            disabled={doc.status === 'uploading'}
+                          >
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
                       </motion.div>
