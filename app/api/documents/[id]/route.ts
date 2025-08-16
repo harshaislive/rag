@@ -24,7 +24,7 @@ export async function DELETE(
     const db = drizzle(connection);
 
     try {
-      // First, get the resource to check if it exists
+      // First, get the resource to check if it exists and get fileName for deleting all chunks
       const resource = await db
         .select()
         .from(resources)
@@ -36,18 +36,31 @@ export async function DELETE(
         return Response.json({ error: 'Document not found' }, { status: 404 });
       }
 
-      // Delete associated embeddings first (foreign key constraint)
-      const deletedEmbeddings = await db
-        .delete(embeddings)
-        .where(eq(embeddings.resourceId, documentId))
-        .returning();
+      const fileName = resource[0].fileName;
+      const bucketId = resource[0].bucketId;
 
-      console.log(`Deleted ${deletedEmbeddings.length} embeddings for document ${documentId}`);
+      // Get all resources (chunks) for this document
+      const allDocumentResources = await db
+        .select()
+        .from(resources)
+        .where(eq(resources.fileName, fileName));
 
-      // Delete the resource
+      // Delete embeddings for all chunks of this document
+      let totalDeletedEmbeddings = 0;
+      for (const res of allDocumentResources) {
+        const deletedEmbeddings = await db
+          .delete(embeddings)
+          .where(eq(embeddings.resourceId, res.id))
+          .returning();
+        totalDeletedEmbeddings += deletedEmbeddings.length;
+      }
+
+      console.log(`Deleted ${totalDeletedEmbeddings} embeddings for document ${fileName}`);
+
+      // Delete all resources (chunks) for this document
       const deletedResources = await db
         .delete(resources)
-        .where(eq(resources.id, documentId))
+        .where(eq(resources.fileName, fileName))
         .returning();
 
       await connection.end();
@@ -56,13 +69,14 @@ export async function DELETE(
         return Response.json({ error: 'Failed to delete document' }, { status: 500 });
       }
 
-      console.log(`Successfully deleted document: ${resource[0].fileName}`);
+      console.log(`Successfully deleted document: ${fileName} (${deletedResources.length} chunks)`);
       
       return Response.json({
         success: true,
         message: 'Document deleted successfully',
-        fileName: resource[0].fileName,
-        deletedEmbeddings: deletedEmbeddings.length
+        fileName: fileName,
+        deletedEmbeddings: totalDeletedEmbeddings,
+        deletedChunks: deletedResources.length
       });
 
     } catch (dbError) {

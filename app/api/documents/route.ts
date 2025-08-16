@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     // Get unique documents (group by fileName since we chunk documents)
     const documents = await db
       .select({
+        id: sql<string>`min(${resources.id})`.as('id'), // Get the first resource ID for deletion
         fileName: resources.fileName,
         fileType: resources.fileType,
         fileSize: resources.fileSize,
@@ -35,8 +36,8 @@ export async function GET(req: NextRequest) {
     await connection.end();
 
     // Transform to match frontend interface
-    const transformedDocs = documents.map((doc, index) => ({
-      id: `${doc.bucketId}-${doc.fileName}-${index}`,
+    const transformedDocs = documents.map((doc) => ({
+      id: doc.id, // Use actual database ID for deletion
       bucketId: doc.bucketId,
       name: doc.fileName,
       fileType: doc.fileType?.toUpperCase() || 'UNKNOWN',
