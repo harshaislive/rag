@@ -273,20 +273,43 @@ export default function KnowledgeGarden() {
     
     setIsCreating(true);
     try {
-      const bucket: Bucket = {
-        id: newBucket.name.toLowerCase().replace(/\s+/g, '-'),
-        name: newBucket.name,
-        description: newBucket.description,
-        color: newBucket.color,
-        documentCount: 0
-      };
+      console.log('Creating bucket:', newBucket);
       
-      setBuckets(prev => [...prev, bucket]);
-      setNewBucket({ name: '', description: '', color: '#344736' });
-      setActiveBucket(bucket.id);
-      setIsDialogOpen(false);
-      toast.success(`Created bucket: ${bucket.name}`);
+      const response = await fetch('/api/buckets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newBucket.name,
+          description: newBucket.description,
+          color: newBucket.color,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Bucket created successfully:', data);
+        
+        toast.success(`Created bucket: ${data.bucket.name}`);
+        
+        // Add the new bucket to local state
+        setBuckets(prev => [...prev, data.bucket]);
+        setActiveBucket(data.bucket.id);
+        setNewBucket({ name: '', description: '', color: '#344736' });
+        setIsDialogOpen(false);
+        
+        // Refresh buckets from server after a short delay
+        setTimeout(() => {
+          fetchBuckets();
+        }, 500);
+      } else {
+        const error = await response.json();
+        console.error('Bucket creation error:', error);
+        toast.error(`Failed to create bucket: ${error.error || 'Unknown error'}`);
+      }
     } catch (error) {
+      console.error('Error creating bucket:', error);
       toast.error('Failed to create bucket');
     } finally {
       setIsCreating(false);
@@ -559,20 +582,20 @@ export default function KnowledgeGarden() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-0 px-4 sm:px-6 flex-1 overflow-hidden">
+            <CardContent className="pt-0 px-4 sm:px-6 flex-1 overflow-hidden flex flex-col">
               {!activeBucket ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                  <Folder className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-3 opacity-50" />
-                  <p className="font-medium text-sm sm:text-base">Select a bucket</p>
-                  <p className="text-xs sm:text-sm">Choose a bucket to view documents</p>
+                <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground text-center">
+                  <Folder className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-4 opacity-50" />
+                  <p className="font-medium text-base sm:text-lg mb-2">Select a bucket</p>
+                  <p className="text-sm sm:text-base">Choose a bucket to view documents</p>
                 </div>
               ) : filteredDocuments.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                  <FileText className="h-8 w-8 sm:h-12 sm:w-12 mx-auto mb-3 opacity-50" />
-                  <p className="font-medium text-sm sm:text-base">
+                <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground text-center">
+                  <FileText className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-4 opacity-50" />
+                  <p className="font-medium text-base sm:text-lg mb-2">
                     {searchQuery ? 'No documents match your search' : 'No documents yet'}
                   </p>
-                  <p className="text-xs sm:text-sm">
+                  <p className="text-sm sm:text-base">
                     {searchQuery ? 'Try a different search term' : 'Click Upload to add files'}
                   </p>
                 </div>
