@@ -31,7 +31,7 @@ export async function POST(req: Request) {
     model: azure(env.AZURE_OPENAI_DEPLOYMENT),
     messages: modifiedMessages,
     maxSteps: 5,
-    toolChoice: 'auto',
+    toolChoice: toolMode === 'required' ? 'required' : 'auto',
     system: `You are a helpful assistant with access to a knowledge base. Be helpful and conversational.`,
     tools: {
       addResource: tool({
