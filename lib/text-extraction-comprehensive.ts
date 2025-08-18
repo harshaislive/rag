@@ -24,6 +24,8 @@ interface ExtractionResult {
     isVeryLarge?: boolean;
     sampleSize?: number;
     processingType?: 'full' | 'sample' | 'minimal';
+    extractionError?: string;
+    extractionType?: 'fallback' | 'timeout' | 'success';
   };
 }
 
@@ -111,11 +113,44 @@ async function extractFromPDF(buffer: Buffer): Promise<ExtractionResult> {
   return new Promise((resolve, reject) => {
     const pdfParser = new PDFParser(null, true);
     
+    // Add timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      resolve({
+        text: `[PDF Document: Extraction timeout - This PDF took too long to process. Please try a simpler PDF file.]`,
+        metadata: {
+          pages: 0,
+          extractionError: 'Timeout after 30 seconds',
+          extractionType: 'timeout'
+        }
+      });
+    }, 30000); // 30 second timeout
+    
     pdfParser.on('pdfParser_dataError', (errData: any) => {
-      reject(new Error(`PDF parsing error: ${errData.parserError}`));
+      const errorMessage = errData.parserError?.toString() || 'Unknown PDF error';
+      console.warn('PDF parsing failed:', errorMessage);
+      
+      // For problematic PDFs, return a fallback response instead of rejecting
+      if (errorMessage.includes('Invalid XRef') || 
+          errorMessage.includes('corrupted') || 
+          errorMessage.includes('Invalid PDF') ||
+          errorMessage.includes('Error: Error:')) {
+        
+        resolve({
+          text: `[PDF Document: Text extraction failed - This PDF may be image-based, password-protected, or corrupted. Please try converting to text format or use OCR software for better results.]`,
+          metadata: {
+            pages: 0,
+            extractionError: errorMessage,
+            extractionType: 'fallback'
+          }
+        });
+      } else {
+        reject(new Error(`PDF parsing error: ${errorMessage}`));
+      }
+      clearTimeout(timeout);
     });
     
     pdfParser.on('pdfParser_dataReady', (pdfData: any) => {
+      clearTimeout(timeout);
       try {
         let text = '';
         const pages = pdfData.Pages || [];
