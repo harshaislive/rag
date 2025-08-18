@@ -180,13 +180,85 @@ async function extractFromExcel(buffer: Buffer): Promise<ExtractionResult> {
   };
 }
 
-// CSV Extraction
+// CSV Extraction with JSON conversion
 function extractFromCSV(buffer: Buffer): ExtractionResult {
-  const text = new TextDecoder('utf-8').decode(buffer);
-  return {
-    text,
-    metadata: {}
-  };
+  const csvText = new TextDecoder('utf-8').decode(buffer);
+  
+  try {
+    // Parse CSV to structured data
+    const lines = csvText.trim().split('\n');
+    if (lines.length === 0) {
+      return { text: csvText, metadata: {} };
+    }
+    
+    // Get headers from first row
+    const headers = parseCSVRow(lines[0]);
+    const jsonData: any[] = [];
+    
+    // Parse each data row
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseCSVRow(lines[i]);
+      if (values.length === headers.length) {
+        const row: any = {};
+        headers.forEach((header, index) => {
+          row[header] = values[index];
+        });
+        jsonData.push(row);
+      }
+    }
+    
+    // Create searchable text combining original CSV and JSON structure
+    const jsonString = JSON.stringify(jsonData, null, 2);
+    const searchableText = `CSV Data:\n${csvText}\n\nStructured JSON Format:\n${jsonString}`;
+    
+    return {
+      text: searchableText,
+      metadata: {
+        rows: jsonData.length,
+        columns: headers.length,
+        headers: headers
+      }
+    };
+  } catch (error) {
+    // If parsing fails, return original CSV text
+    console.warn('CSV parsing failed, using raw text:', error);
+    return {
+      text: csvText,
+      metadata: {}
+    };
+  }
+}
+
+// Helper function to parse CSV row (handles quoted values)
+function parseCSVRow(row: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < row.length; i++) {
+    const char = row[i];
+    
+    if (char === '"') {
+      if (inQuotes && row[i + 1] === '"') {
+        // Escaped quote
+        current += '"';
+        i++; // Skip next quote
+      } else {
+        // Toggle quote state
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      // End of field
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  // Add last field
+  result.push(current.trim());
+  return result;
 }
 
 // JSON Extraction (convert to readable text)
@@ -257,12 +329,239 @@ function extractFromXML(buffer: Buffer): ExtractionResult {
   };
 }
 
-// Enhanced text chunking with smart boundaries
+// Enhanced text chunking with smart boundaries and structured data handling
 export function chunkText(text: string, maxChunkSize: number = 1000, overlap: number = 100): string[] {
   if (text.length <= maxChunkSize) {
     return [text];
   }
 
+  // Detect if this is structured data (JSON, CSV, etc.)
+  const isStructuredData = isStructuredContent(text);
+  
+  if (isStructuredData) {
+    return chunkStructuredData(text, maxChunkSize, overlap);
+  } else {
+    return chunkUnstructuredText(text, maxChunkSize, overlap);
+  }
+}
+
+// Detect if content is structured (JSON, CSV format, etc.)
+function isStructuredContent(text: string): boolean {
+  // Check for JSON structure
+  if (text.trim().startsWith('{') || text.trim().startsWith('[') || text.includes('Structured JSON Format:')) {
+    return true;
+  }
+  
+  // Check for CSV structure
+  if (text.includes('CSV Data:') || (text.includes(',') && text.split('\n').length > 2)) {
+    const lines = text.split('\n');
+    if (lines.length > 1) {
+      const firstLine = lines[0];
+      const secondLine = lines[1];
+      const firstCommas = (firstLine.match(/,/g) || []).length;
+      const secondCommas = (secondLine.match(/,/g) || []).length;
+      // If first two lines have similar comma counts, likely CSV
+      return Math.abs(firstCommas - secondCommas) <= 1 && firstCommas > 0;
+    }
+  }
+  
+  return false;
+}
+
+// Chunking for structured data (preserve record boundaries)
+function chunkStructuredData(text: string, maxChunkSize: number, overlap: number): string[] {
+  const chunks: string[] = [];
+  
+  // Handle CSV format specifically
+  if (text.includes('CSV Data:')) {
+    return chunkCSVData(text, maxChunkSize, overlap);
+  }
+  
+  // Handle JSON format
+  if (text.includes('Structured JSON Format:') || text.trim().startsWith('{') || text.trim().startsWith('[')) {
+    return chunkJSONData(text, maxChunkSize, overlap);
+  }
+  
+  // Fallback to line-based chunking for other structured data
+  const lines = text.split('\n');
+  let currentChunk = '';
+  
+  for (const line of lines) {
+    const testChunk = currentChunk + (currentChunk ? '\n' : '') + line;
+    
+    if (testChunk.length > maxChunkSize && currentChunk.length > 0) {
+      chunks.push(currentChunk.trim());
+      currentChunk = line;
+    } else {
+      currentChunk = testChunk;
+    }
+  }
+  
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+  
+  return addOverlapToChunks(chunks, overlap);
+}
+
+// Specialized CSV chunking
+function chunkCSVData(text: string, maxChunkSize: number, overlap: number): string[] {
+  const chunks: string[] = [];
+  const sections = text.split('\n\nStructured JSON Format:\n');
+  
+  if (sections.length === 2) {
+    const [csvSection, jsonSection] = sections;
+    
+    // Chunk CSV section (preserve header + rows)
+    const csvChunks = chunkCSVSection(csvSection, maxChunkSize);
+    
+    // Chunk JSON section (preserve complete records)
+    const jsonChunks = chunkJSONSection(jsonSection, maxChunkSize);
+    
+    // Combine and interleave for better searchability
+    chunks.push(...csvChunks);
+    chunks.push(...jsonChunks);
+  } else {
+    // Fallback if format is different
+    return chunkUnstructuredText(text, maxChunkSize, overlap);
+  }
+  
+  return addOverlapToChunks(chunks, overlap);
+}
+
+// CSV section chunking (preserve complete rows)
+function chunkCSVSection(csvSection: string, maxChunkSize: number): string[] {
+  const lines = csvSection.split('\n');
+  const chunks: string[] = [];
+  
+  if (lines.length === 0) return [];
+  
+  // Always include header
+  const header = lines[0];
+  let currentChunk = header;
+  
+  for (let i = 1; i < lines.length; i++) {
+    const testChunk = currentChunk + '\n' + lines[i];
+    
+    if (testChunk.length > maxChunkSize && currentChunk !== header) {
+      chunks.push(currentChunk);
+      currentChunk = header + '\n' + lines[i]; // Start new chunk with header
+    } else {
+      currentChunk = testChunk;
+    }
+  }
+  
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk);
+  }
+  
+  return chunks;
+}
+
+// JSON section chunking (preserve complete objects)
+function chunkJSONSection(jsonSection: string, maxChunkSize: number): string[] {
+  try {
+    const jsonData = JSON.parse(jsonSection);
+    
+    if (Array.isArray(jsonData)) {
+      const chunks: string[] = [];
+      let currentBatch: any[] = [];
+      
+      for (const item of jsonData) {
+        const testBatch = [...currentBatch, item];
+        const testChunk = JSON.stringify(testBatch, null, 2);
+        
+        if (testChunk.length > maxChunkSize && currentBatch.length > 0) {
+          chunks.push(JSON.stringify(currentBatch, null, 2));
+          currentBatch = [item];
+        } else {
+          currentBatch = testBatch;
+        }
+      }
+      
+      if (currentBatch.length > 0) {
+        chunks.push(JSON.stringify(currentBatch, null, 2));
+      }
+      
+      return chunks;
+    }
+  } catch (error) {
+    // If JSON parsing fails, treat as regular text
+    return chunkUnstructuredText(jsonSection, maxChunkSize, 100);
+  }
+  
+  return [jsonSection];
+}
+
+// JSON data chunking
+function chunkJSONData(text: string, maxChunkSize: number, overlap: number): string[] {
+  try {
+    const jsonData = JSON.parse(text);
+    
+    if (Array.isArray(jsonData)) {
+      return chunkJSONArray(jsonData, maxChunkSize);
+    } else if (typeof jsonData === 'object') {
+      return chunkJSONObject(jsonData, maxChunkSize);
+    }
+  } catch (error) {
+    // If not valid JSON, treat as regular text
+    return chunkUnstructuredText(text, maxChunkSize, overlap);
+  }
+  
+  return [text];
+}
+
+// Chunk JSON array preserving complete objects
+function chunkJSONArray(jsonArray: any[], maxChunkSize: number): string[] {
+  const chunks: string[] = [];
+  let currentBatch: any[] = [];
+  
+  for (const item of jsonArray) {
+    const testBatch = [...currentBatch, item];
+    const testChunk = JSON.stringify(testBatch, null, 2);
+    
+    if (testChunk.length > maxChunkSize && currentBatch.length > 0) {
+      chunks.push(JSON.stringify(currentBatch, null, 2));
+      currentBatch = [item];
+    } else {
+      currentBatch = testBatch;
+    }
+  }
+  
+  if (currentBatch.length > 0) {
+    chunks.push(JSON.stringify(currentBatch, null, 2));
+  }
+  
+  return chunks;
+}
+
+// Chunk JSON object by properties
+function chunkJSONObject(jsonObject: any, maxChunkSize: number): string[] {
+  const chunks: string[] = [];
+  const keys = Object.keys(jsonObject);
+  let currentObject: any = {};
+  
+  for (const key of keys) {
+    const testObject = { ...currentObject, [key]: jsonObject[key] };
+    const testChunk = JSON.stringify(testObject, null, 2);
+    
+    if (testChunk.length > maxChunkSize && Object.keys(currentObject).length > 0) {
+      chunks.push(JSON.stringify(currentObject, null, 2));
+      currentObject = { [key]: jsonObject[key] };
+    } else {
+      currentObject = testObject;
+    }
+  }
+  
+  if (Object.keys(currentObject).length > 0) {
+    chunks.push(JSON.stringify(currentObject, null, 2));
+  }
+  
+  return chunks;
+}
+
+// Regular text chunking with smart boundaries
+function chunkUnstructuredText(text: string, maxChunkSize: number, overlap: number): string[] {
   const chunks: string[] = [];
   let start = 0;
 
@@ -298,4 +597,28 @@ export function chunkText(text: string, maxChunkSize: number = 1000, overlap: nu
   }
 
   return chunks.filter(chunk => chunk.length > 0);
+}
+
+// Add overlap between chunks for better context preservation
+function addOverlapToChunks(chunks: string[], overlapSize: number): string[] {
+  if (chunks.length <= 1 || overlapSize <= 0) {
+    return chunks;
+  }
+  
+  const overlappedChunks: string[] = [];
+  
+  for (let i = 0; i < chunks.length; i++) {
+    let chunk = chunks[i];
+    
+    // Add overlap from previous chunk
+    if (i > 0 && overlapSize > 0) {
+      const prevChunk = chunks[i - 1];
+      const overlap = prevChunk.slice(-Math.min(overlapSize, prevChunk.length));
+      chunk = overlap + '\n...\n' + chunk;
+    }
+    
+    overlappedChunks.push(chunk);
+  }
+  
+  return overlappedChunks;
 }

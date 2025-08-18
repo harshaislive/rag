@@ -38,6 +38,7 @@ interface Document {
   uploadDate: string;
   status: 'uploading' | 'processing' | 'completed' | 'error';
   progress?: number;
+  isDeleting?: boolean;
 }
 
 interface Bucket {
@@ -46,6 +47,7 @@ interface Bucket {
   description?: string;
   color: string;
   documentCount: number;
+  isDeleting?: boolean;
 }
 
 export default function KnowledgeGarden() {
@@ -167,12 +169,12 @@ export default function KnowledgeGarden() {
         const progressInterval = setInterval(() => {
           setDocuments(prev => prev.map(doc => {
             if (doc.id === newDoc.id && doc.status === 'uploading') {
-              const newProgress = Math.min((doc.progress || 0) + Math.random() * 10, 90);
+              const newProgress = Math.min((doc.progress || 0) + Math.random() * 8, 85);
               return { ...doc, progress: newProgress };
             }
             return doc;
           }));
-        }, 500);
+        }, 400);
 
         const response = await fetch('/api/upload-working', {
           method: 'POST',
@@ -182,20 +184,28 @@ export default function KnowledgeGarden() {
         clearInterval(progressInterval);
 
         if (response.ok) {
-          toast.success(`${file.name} uploaded successfully`);
-          
-          // Update the local document to completed status first
+          // First complete the progress bar
           setDocuments(prev => prev.map(doc => 
             doc.id === newDoc.id 
-              ? { ...doc, status: 'completed', progress: 100 }
+              ? { ...doc, progress: 100 }
               : doc
           ));
           
-          // Wait a moment to show completion, then refresh from server
+          // After a short delay, show completed status
+          setTimeout(() => {
+            setDocuments(prev => prev.map(doc => 
+              doc.id === newDoc.id 
+                ? { ...doc, status: 'completed', progress: undefined }
+                : doc
+            ));
+            toast.success(`${file.name} uploaded successfully`);
+          }, 300);
+          
+          // Finally refresh from server and remove temp document
           setTimeout(async () => {
             await fetchBuckets();
             await fetchDocuments(activeBucket);
-          }, 1000);
+          }, 1500);
         } else {
           const error = await response.json();
           toast.error(error.error || `Failed to upload ${file.name}`);
@@ -226,6 +236,13 @@ export default function KnowledgeGarden() {
       return;
     }
 
+    // Immediately show loading state
+    setDocuments(prev => prev.map(doc => 
+      doc.id === documentId 
+        ? { ...doc, isDeleting: true }
+        : doc
+    ));
+
     try {
       console.log('Making DELETE request to:', `/api/documents/${documentId}`);
       const response = await fetch(`/api/documents/${documentId}`, {
@@ -237,10 +254,10 @@ export default function KnowledgeGarden() {
       if (response.ok) {
         const data = await response.json();
         console.log('Delete response data:', data);
-        toast.success(`Successfully deleted ${fileName}`);
         
-        // Remove document from local state immediately
+        // Immediately remove from UI with animation
         setDocuments(prev => prev.filter(doc => doc.id !== documentId));
+        toast.success(`Successfully deleted ${fileName}`);
         
         // Update bucket document count
         setBuckets(prev => prev.map(bucket => 
@@ -249,18 +266,34 @@ export default function KnowledgeGarden() {
             : bucket
         ));
         
-        // Refresh data from server after a short delay
+        // Refresh data from server after a short delay to sync
         setTimeout(() => {
           fetchDocuments(activeBucket);
           fetchBuckets();
-        }, 500);
+        }, 1000);
       } else {
         const error = await response.json();
         console.error('Delete error response:', error);
+        
+        // Remove loading state on error
+        setDocuments(prev => prev.map(doc => 
+          doc.id === documentId 
+            ? { ...doc, isDeleting: false }
+            : doc
+        ));
+        
         toast.error(`Failed to delete ${fileName}: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error deleting document:', error);
+      
+      // Remove loading state on error
+      setDocuments(prev => prev.map(doc => 
+        doc.id === documentId 
+          ? { ...doc, isDeleting: false }
+          : doc
+      ));
+      
       toast.error(`Failed to delete ${fileName}`);
     }
   };
@@ -327,6 +360,13 @@ export default function KnowledgeGarden() {
       return;
     }
 
+    // Immediately show loading state
+    setBuckets(prev => prev.map(bucket => 
+      bucket.id === bucketId 
+        ? { ...bucket, isDeleting: true }
+        : bucket
+    ));
+
     try {
       console.log('Making DELETE request to:', `/api/buckets/${bucketId}`);
       const response = await fetch(`/api/buckets/${bucketId}`, {
@@ -338,10 +378,10 @@ export default function KnowledgeGarden() {
       if (response.ok) {
         const data = await response.json();
         console.log('Delete bucket response data:', data);
-        toast.success(`Successfully deleted bucket "${bucketName}" and ${data.deletedResources} documents`);
         
-        // Remove bucket from local state immediately
+        // Immediately remove from UI
         setBuckets(prev => prev.filter(bucket => bucket.id !== bucketId));
+        toast.success(`Successfully deleted bucket "${bucketName}" and ${data.deletedResources} documents`);
         
         // Clear active bucket if it was the deleted one
         if (activeBucket === bucketId) {
@@ -350,17 +390,33 @@ export default function KnowledgeGarden() {
           setDocuments([]);
         }
         
-        // Refresh data from server after a short delay
+        // Refresh data from server after a short delay to sync
         setTimeout(() => {
           fetchBuckets();
-        }, 500);
+        }, 1000);
       } else {
         const error = await response.json();
         console.error('Delete bucket error response:', error);
+        
+        // Remove loading state on error
+        setBuckets(prev => prev.map(bucket => 
+          bucket.id === bucketId 
+            ? { ...bucket, isDeleting: false }
+            : bucket
+        ));
+        
         toast.error(`Failed to delete bucket: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error deleting bucket:', error);
+      
+      // Remove loading state on error
+      setBuckets(prev => prev.map(bucket => 
+        bucket.id === bucketId 
+          ? { ...bucket, isDeleting: false }
+          : bucket
+      ));
+      
       toast.error(`Failed to delete bucket "${bucketName}"`);
     }
   };
@@ -534,10 +590,20 @@ export default function KnowledgeGarden() {
                         <Button 
                           variant="ghost" 
                           size="sm" 
-                          className="h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                          className={cn(
+                            "h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground transition-all",
+                            bucket.isDeleting 
+                              ? "opacity-50 cursor-not-allowed" 
+                              : "opacity-0 group-hover:opacity-100"
+                          )}
                           onClick={(e) => deleteBucket(bucket.id, bucket.name, e)}
+                          disabled={bucket.isDeleting}
                         >
-                          <Trash2 className="h-3 w-3" />
+                          {bucket.isDeleting ? (
+                            <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
                         </Button>
                       </div>
                     </motion.div>
@@ -630,16 +696,25 @@ export default function KnowledgeGarden() {
                             className="text-xs flex items-center gap-1"
                           >
                             {getStatusIcon(doc.status)}
-                            {doc.status}
+                            {doc.isDeleting ? 'deleting' : doc.status}
                           </Badge>
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            className="h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                            className={cn(
+                              "h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground transition-all",
+                              doc.isDeleting 
+                                ? "opacity-50 cursor-not-allowed" 
+                                : "opacity-0 group-hover:opacity-100"
+                            )}
                             onClick={() => deleteDocument(doc.id, doc.name)}
-                            disabled={doc.status === 'uploading'}
+                            disabled={doc.status === 'uploading' || doc.isDeleting}
                           >
-                            <Trash2 className="h-3 w-3" />
+                            {doc.isDeleting ? (
+                              <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3 w-3" />
+                            )}
                           </Button>
                         </div>
                       </motion.div>
