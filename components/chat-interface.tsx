@@ -258,7 +258,7 @@ export default function ChatInterface() {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const { messages, input, handleInputChange, handleSubmit: originalHandleSubmit, isLoading, reload, setMessages } = useChat({
+  const { messages, input, handleInputChange, handleSubmit: originalHandleSubmit, isLoading, reload, setMessages, append } = useChat({
     body: {
       toolChoice: 'auto', // Always use auto mode on backend
     },
@@ -279,7 +279,7 @@ export default function ChatInterface() {
   });
 
   // Custom handleSubmit that modifies the input for required mode
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!input.trim() || isLoading) return;
@@ -288,19 +288,18 @@ export default function ChatInterface() {
     const originalInput = input.trim();
     
     // Modify the input if in required mode
-    if (toolMode === 'required') {
-      const modifiedInput = `${originalInput}\n\nOnly check my database and don't use your personal knowledge.`;
-      // Update the input field temporarily
-      handleInputChange({ target: { value: modifiedInput } } as React.ChangeEvent<HTMLInputElement>);
-      
-      // Submit after input is updated
-      setTimeout(() => {
-        originalHandleSubmit(e);
-      }, 0);
-    } else {
-      // Normal submission for auto mode
-      originalHandleSubmit(e);
-    }
+    const finalInput = toolMode === 'required' 
+      ? `${originalInput}\n\nOnly check my database and don't use your personal knowledge.`
+      : originalInput;
+    
+    // Clear the input field
+    handleInputChange({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>);
+    
+    // Use append to send the message directly
+    append({
+      role: 'user',
+      content: finalInput,
+    });
   };
 
   // Enhanced loading state management with better transitions
