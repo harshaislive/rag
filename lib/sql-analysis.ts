@@ -69,7 +69,7 @@ export class SQLAnalyzer {
       const content = resourceData[0].content;
       
       // Extract headers from the content (assuming it contains CSV data)
-      const lines = content.split('\n').filter(line => line.trim());
+      const lines = content.split('\n').filter((line: string) => line.trim());
       if (lines.length === 0) return null;
 
       // Parse headers from first line that looks like CSV headers
@@ -78,7 +78,7 @@ export class SQLAnalyzer {
         if (line.includes('Headers:')) {
           const headerMatch = line.match(/Headers:\s*(.+)/);
           if (headerMatch) {
-            headers = headerMatch[1].split(',').map(h => h.trim());
+            headers = headerMatch[1].split(',').map((h: string) => h.trim());
             break;
           }
         }
@@ -308,7 +308,7 @@ export class SQLAnalyzer {
     
     for (const resource of resourceData) {
       const content = resource.content;
-      const lines = content.split('\n').filter(line => line.trim());
+      const lines = content.split('\n').filter((line: string) => line.trim());
       
       // Find CSV data lines (skip metadata)
       let csvLines: string[] = [];
