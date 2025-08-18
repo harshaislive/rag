@@ -1,7 +1,7 @@
 "use server";
 
 import { SQLAnalyzer } from '@/lib/sql-analysis';
-import { searchKnowledgeBase } from '@/lib/actions/search';
+import { findRelevantContent } from '@/lib/ai/embedding';
 
 export interface AnalysisResult {
   type: 'rag' | 'sql' | 'hybrid';
@@ -133,12 +133,12 @@ async function performRAGAnalysis(
   bucketId?: string
 ): Promise<AnalysisResult> {
   try {
-    const ragResults = await searchKnowledgeBase(query, bucketId);
+    const ragResults = await findRelevantContent(query);
     return {
       type: 'rag',
       success: true,
       ragResults: ragResults,
-      explanation: `Found ${ragResults?.results?.length || 0} relevant documents`
+      explanation: `Found ${ragResults?.length || 0} relevant documents`
     };
   } catch (error) {
     console.error('RAG analysis error:', error);

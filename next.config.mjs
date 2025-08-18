@@ -5,13 +5,7 @@ const nextConfig = {
       bodySizeLimit: '50mb'
     }
   },
-  serverExternalPackages: ['pdf2json', 'mammoth', 'xlsx'],
-  // Increase API route body size limits
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
-    },
-  }
+  serverExternalPackages: ['pdf2json', 'mammoth', 'xlsx']
 };
 
 export default nextConfig;
