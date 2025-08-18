@@ -19,18 +19,20 @@ export async function POST(req: Request) {
   const result = streamText({
     model: azure(env.AZURE_OPENAI_DEPLOYMENT),
     messages,
-    maxSteps: 5,
+    maxSteps: 2,
     toolChoice,
     system: `You are a helpful assistant with access to a knowledge base.
 
 TOOL CHOICE MODE: ${toolChoice.toUpperCase()}
 
 ${toolChoice === 'required' ? `
-**REQUIRED MODE** - You MUST use at least one tool for every response:
-- For document questions: Use getInformation tool
-- For general questions: Use getInformation to search for relevant context first
-- For new information: Use addResource tool
-- Always try to find relevant information using tools before responding
+**REQUIRED MODE** - Always search knowledge base first, then provide helpful answers:
+1. Use getInformation tool to search for relevant context
+2. After getting search results, ALWAYS provide a complete answer based on the findings
+3. If no relevant information is found, still provide a helpful response
+4. Don't get stuck searching - one tool call per response, then answer
+
+IMPORTANT: After using tools, you must provide a conversational response to the user.
 
 ` : `
 **AUTO MODE** - Use tools intelligently when needed:
