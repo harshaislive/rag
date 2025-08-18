@@ -44,11 +44,24 @@ export async function POST(req: NextRequest) {
     const uploadedBy = formData.get('uploadedBy') as string || '';
     const brand = formData.get('brand') as string || 'Beforest';
     
+    console.log('Form data received:', {
+      hasFile: !!file,
+      fileName: file?.name,
+      fileType: file?.type,
+      fileSize: file?.size,
+      bucketId,
+      description,
+      uploadedBy,
+      brand
+    });
+    
     if (!file) {
+      console.error('Upload failed: No file provided');
       return Response.json({ error: 'No file provided' }, { status: 400 });
     }
     
     if (!bucketId) {
+      console.error('Upload failed: No bucket ID provided');
       return Response.json({ error: 'No bucket ID provided' }, { status: 400 });
     }
 
@@ -73,12 +86,13 @@ export async function POST(req: NextRequest) {
       console.log(`Extracted ${text.length} characters from ${file.name}`);
       
       if (!text || text.trim().length === 0) {
+        console.error(`Text extraction failed: Empty text from ${file.name}`);
         return Response.json({ 
           error: 'Could not extract text from file. The file might be empty, image-based, or corrupted.' 
         }, { status: 400 });
       }
     } catch (extractionError) {
-      console.error('Text extraction error:', extractionError);
+      console.error('Text extraction error for file:', file.name, extractionError);
       return Response.json({ 
         error: 'Failed to extract text from file: ' + (extractionError instanceof Error ? extractionError.message : 'Unknown error')
       }, { status: 400 });

@@ -247,6 +247,16 @@ export default function KnowledgeGarden() {
           }));
         }, 800);
 
+        console.log('Uploading file:', {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          bucketId: activeBucket,
+          description: uploadForm.description,
+          uploadedBy: uploadForm.uploadedBy,
+          brand: uploadForm.brand
+        });
+
         const response = await fetch('/api/upload-working', {
           method: 'POST',
           body: formData,
@@ -306,8 +316,17 @@ export default function KnowledgeGarden() {
             await fetchDocuments(activeBucket);
           }, 1800);
         } else {
-          const error = await response.json();
-          toast.error(error.error || `Failed to upload ${file.name}`);
+          console.error('Upload failed with status:', response.status);
+          let errorMessage = `Failed to upload ${file.name}`;
+          try {
+            const error = await response.json();
+            errorMessage = error.error || errorMessage;
+            console.error('Upload error details:', error);
+          } catch (parseError) {
+            console.error('Could not parse error response:', parseError);
+            errorMessage = `Upload failed with status ${response.status}`;
+          }
+          toast.error(errorMessage);
           setDocuments(prev => prev.map(doc => 
             doc.id === newDoc.id 
               ? { ...doc, status: 'error', progress: undefined }
@@ -315,7 +334,8 @@ export default function KnowledgeGarden() {
           ));
         }
       } catch (error) {
-        toast.error(`Upload failed: ${file.name}`);
+        console.error('Upload error:', error);
+        toast.error(`Upload failed: ${file.name} - ${error instanceof Error ? error.message : 'Unknown error'}`);
         setDocuments(prev => prev.map(doc => 
           doc.id === newDoc.id 
             ? { ...doc, status: 'error', progress: undefined }
