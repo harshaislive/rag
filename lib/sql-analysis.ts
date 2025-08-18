@@ -1,6 +1,4 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import { env } from '@/lib/env.mjs';
+import { db } from '@/lib/db';
 import { resources } from '@/lib/db/schema/resources';
 import { eq } from 'drizzle-orm';
 
@@ -21,18 +19,13 @@ interface CSVMetadata {
 }
 
 export class SQLAnalyzer {
-  private db: any;
-  private connection: any;
-  
+  // Use shared database connection like RAG system
   constructor() {
-    this.connection = postgres(env.DATABASE_URL, { max: 1 });
-    this.db = drizzle(this.connection);
+    // No need for separate connection - use shared db
   }
 
   async cleanup() {
-    if (this.connection) {
-      await this.connection.end();
-    }
+    // No cleanup needed - shared connection is managed globally
   }
 
   // Detect if a question requires SQL analysis vs semantic search
@@ -58,7 +51,7 @@ export class SQLAnalyzer {
   // Get CSV metadata from resources table
   async getCSVMetadata(fileName: string, bucketId: string): Promise<CSVMetadata | null> {
     try {
-      const resourceData = await this.db
+      const resourceData = await db
         .select()
         .from(resources)
         .where(eq(resources.fileName, fileName))
@@ -254,7 +247,7 @@ export class SQLAnalyzer {
       }
 
       // Get all CSV content chunks
-      const resourceData = await this.db
+      const resourceData = await db
         .select()
         .from(resources)
         .where(eq(resources.fileName, fileName));

@@ -152,14 +152,9 @@ async function performRAGAnalysis(
 
 // Helper function to find CSV files in a bucket
 async function findCSVFilesInBucket(bucketId: string): Promise<string[]> {
-  const { drizzle } = await import('drizzle-orm/postgres-js');
-  const postgres = (await import('postgres')).default;
-  const { env } = await import('@/lib/env.mjs');
+  const { db } = await import('@/lib/db');
   const { resources } = await import('@/lib/db/schema/resources');
-  const { eq, sql } = await import('drizzle-orm');
-
-  const connection = postgres(env.DATABASE_URL, { max: 1 });
-  const db = drizzle(connection);
+  const { sql } = await import('drizzle-orm');
 
   try {
     const csvFiles = await db
@@ -168,10 +163,8 @@ async function findCSVFilesInBucket(bucketId: string): Promise<string[]> {
       .where(sql`${resources.bucketId} = ${bucketId} AND (${resources.fileType} = 'text/csv' OR ${resources.fileName} LIKE '%.csv')`)
       .groupBy(resources.fileName);
 
-    await connection.end();
     return csvFiles.map(f => f.fileName);
   } catch (error) {
-    await connection.end();
     console.error('Error finding CSV files:', error);
     return [];
   }
@@ -216,7 +209,7 @@ function combineAnalysisResults(sqlData: any, ragData: any, query: string): stri
   return explanation;
 }
 
-// Function to be called by AI tools
+// Function to be called by AI tools with timeout protection
 export async function executeDataAnalysis(args: {
   query: string;
   bucketId?: string;
@@ -224,22 +217,37 @@ export async function executeDataAnalysis(args: {
 }) {
   const { query, bucketId, analysisType = 'auto' } = args;
   
-  if (analysisType === 'sql') {
-    const analyzer = new SQLAnalyzer();
-    try {
-      if (!bucketId) throw new Error('Bucket ID required for SQL analysis');
-      
-      const csvFiles = await findCSVFilesInBucket(bucketId);
-      if (csvFiles.length === 0) throw new Error('No CSV files found in bucket');
-      
-      return await analyzer.executeCSVAnalysis(query, csvFiles[0], bucketId);
-    } finally {
-      await analyzer.cleanup();
-    }
-  } else if (analysisType === 'rag') {
+  // Add timeout protection
+  const timeout = new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Analysis timeout after 10 seconds')), 10000)
+  );
+  
+  try {
+    const analysisPromise = (async () => {
+      if (analysisType === 'sql') {
+        const analyzer = new SQLAnalyzer();
+        try {
+          if (!bucketId) throw new Error('Bucket ID required for SQL analysis');
+          
+          const csvFiles = await findCSVFilesInBucket(bucketId);
+          if (csvFiles.length === 0) throw new Error('No CSV files found in bucket');
+          
+          return await analyzer.executeCSVAnalysis(query, csvFiles[0], bucketId);
+        } finally {
+          await analyzer.cleanup();
+        }
+      } else if (analysisType === 'rag') {
+        return await performRAGAnalysis(query, bucketId);
+      } else {
+        // Auto-detect best approach
+        return await analyzeQuery(query, bucketId);
+      }
+    })();
+    
+    return await Promise.race([analysisPromise, timeout]);
+  } catch (error) {
+    console.error('Data analysis error:', error);
+    // Fallback to simple RAG search on any error
     return await performRAGAnalysis(query, bucketId);
-  } else {
-    // Auto-detect best approach
-    return await analyzeQuery(query, bucketId);
   }
 }
