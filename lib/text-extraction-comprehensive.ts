@@ -17,6 +17,9 @@ interface ExtractionResult {
     author?: string;
     title?: string;
     sheets?: string[];
+    rows?: number;
+    columns?: number;
+    headers?: string[];
   };
 }
 
