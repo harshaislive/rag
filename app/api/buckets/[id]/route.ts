@@ -5,7 +5,7 @@ import { env } from '@/lib/env.mjs';
 import { buckets } from '@/lib/db/schema/buckets';
 import { resources } from '@/lib/db/schema/resources';
 import { embeddings } from '@/lib/db/schema/embeddings';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 export async function DELETE(
   req: NextRequest,
@@ -37,23 +37,20 @@ export async function DELETE(
         return Response.json({ error: 'Bucket not found' }, { status: 404 });
       }
 
-      // Get all resources in this bucket
-      const bucketResources = await db
-        .select()
-        .from(resources)
-        .where(eq(resources.bucketId, bucketId));
+      console.log(`Starting optimized deletion for bucket: ${bucketId}`);
 
-      // Delete all embeddings for resources in this bucket
-      let totalDeletedEmbeddings = 0;
-      for (const resource of bucketResources) {
-        const deletedEmbeddings = await db
-          .delete(embeddings)
-          .where(eq(embeddings.resourceId, resource.id))
-          .returning();
-        totalDeletedEmbeddings += deletedEmbeddings.length;
-      }
+      // OPTIMIZED: Use subquery to delete all embeddings in one operation
+      // This is much faster than the previous loop approach
+      const deletedEmbeddings = await db
+        .delete(embeddings)
+        .where(sql`${embeddings.resourceId} IN (
+          SELECT ${resources.id} 
+          FROM ${resources} 
+          WHERE ${resources.bucketId} = ${bucketId}
+        )`)
+        .returning();
 
-      console.log(`Deleted ${totalDeletedEmbeddings} embeddings for bucket ${bucketId}`);
+      console.log(`Deleted ${deletedEmbeddings.length} embeddings for bucket ${bucketId}`);
 
       // Delete all resources in this bucket
       const deletedResources = await db
@@ -82,7 +79,7 @@ export async function DELETE(
         message: 'Bucket deleted successfully',
         bucketName: bucket[0].name,
         deletedResources: deletedResources.length,
-        deletedEmbeddings: totalDeletedEmbeddings
+        deletedEmbeddings: deletedEmbeddings.length
       });
 
     } catch (dbError) {

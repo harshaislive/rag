@@ -4,7 +4,7 @@ import postgres from 'postgres';
 import { env } from '@/lib/env.mjs';
 import { resources } from '@/lib/db/schema/resources';
 import { embeddings } from '@/lib/db/schema/embeddings';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 export async function DELETE(
   req: NextRequest,
@@ -39,23 +39,20 @@ export async function DELETE(
       const fileName = resource[0].fileName;
       const bucketId = resource[0].bucketId;
 
-      // Get all resources (chunks) for this document
-      const allDocumentResources = await db
-        .select()
-        .from(resources)
-        .where(eq(resources.fileName, fileName));
+      console.log(`Starting optimized deletion for document: ${fileName}`);
 
-      // Delete embeddings for all chunks of this document
-      let totalDeletedEmbeddings = 0;
-      for (const res of allDocumentResources) {
-        const deletedEmbeddings = await db
-          .delete(embeddings)
-          .where(eq(embeddings.resourceId, res.id))
-          .returning();
-        totalDeletedEmbeddings += deletedEmbeddings.length;
-      }
+      // OPTIMIZED: Use subquery to delete all embeddings in one operation
+      // This is much faster than the previous loop approach
+      const deletedEmbeddings = await db
+        .delete(embeddings)
+        .where(sql`${embeddings.resourceId} IN (
+          SELECT ${resources.id} 
+          FROM ${resources} 
+          WHERE ${resources.fileName} = ${fileName}
+        )`)
+        .returning();
 
-      console.log(`Deleted ${totalDeletedEmbeddings} embeddings for document ${fileName}`);
+      console.log(`Deleted ${deletedEmbeddings.length} embeddings for document ${fileName}`);
 
       // Delete all resources (chunks) for this document
       const deletedResources = await db
@@ -75,7 +72,7 @@ export async function DELETE(
         success: true,
         message: 'Document deleted successfully',
         fileName: fileName,
-        deletedEmbeddings: totalDeletedEmbeddings,
+        deletedEmbeddings: deletedEmbeddings.length,
         deletedChunks: deletedResources.length
       });
 
