@@ -68,13 +68,17 @@ const ModernLoadingMessage = ({ state }: { state: LoadingState }) => {
 const ModernMessageBubble = ({ 
   message, 
   onCopy, 
+  onRegenerate,
   isLatest, 
-  isStreaming 
+  isStreaming,
+  isLoading
 }: { 
   message: Message; 
   onCopy: (text: string) => void;
+  onRegenerate: () => void;
   isLatest: boolean;
   isStreaming: boolean;
+  isLoading: boolean;
 }) => {
   const isUser = message.role === "user";
   
@@ -209,10 +213,15 @@ const ModernMessageBubble = ({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => console.log('Regenerate functionality would go here')}
+                  onClick={onRegenerate}
+                  disabled={isLoading}
                   className="h-7 text-xs"
                 >
-                  <RotateCcw className="w-3 h-3 mr-1.5" />
+                  {isLoading ? (
+                    <Loader2 className="w-3 h-3 mr-1.5 animate-spin" />
+                  ) : (
+                    <RotateCcw className="w-3 h-3 mr-1.5" />
+                  )}
                   Regenerate
                 </Button>
               )}
@@ -232,7 +241,7 @@ export default function ChatInterface() {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages } = useChat({
     onToolCall({ toolCall }) {
       setLoadingState('searching');
     },
@@ -288,6 +297,31 @@ export default function ChatInterface() {
     } catch {
       toast.error("Failed to copy");
     }
+  };
+
+  const regenerateResponse = async () => {
+    if (isLoading) {
+      toast.error("Please wait for the current response to complete");
+      return;
+    }
+
+    // Find the last user message
+    const lastUserMessageIndex = messages.findLastIndex(m => m.role === "user");
+    if (lastUserMessageIndex === -1) {
+      toast.error("No user message found to regenerate from");
+      return;
+    }
+
+    // Remove all messages after the last user message
+    const messagesUpToLastUser = messages.slice(0, lastUserMessageIndex + 1);
+    setMessages(messagesUpToLastUser);
+
+    // Use reload to regenerate the response
+    setTimeout(() => {
+      reload();
+    }, 100);
+
+    toast.success("Regenerating response...");
   };
 
   const shouldShowLoadingMessage = isLoading && loadingState !== 'idle' && loadingState !== 'complete';
@@ -349,8 +383,10 @@ export default function ChatInterface() {
                     key={message.id}
                     message={message} 
                     onCopy={copyToClipboard}
+                    onRegenerate={regenerateResponse}
                     isLatest={index === messages.length - 1}
                     isStreaming={isCurrentlyStreaming && index === messages.length - 1}
+                    isLoading={isLoading}
                   />
                 ))}
 
