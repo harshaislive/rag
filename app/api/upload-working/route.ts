@@ -8,15 +8,20 @@ import { generateEmbedding } from '@/lib/ai/embedding';
 import { nanoid } from '@/lib/utils';
 import { extractTextFromFile, chunkText } from '@/lib/text-extraction-comprehensive';
 
+// Allow longer processing time for large files
+export const maxDuration = 300; // 5 minutes
+
 export async function POST(req: NextRequest) {
   try {
     console.log('Upload working API called');
     
-    // Check content length
+    // Check content length with more generous limits for CSV files
     const contentLength = req.headers.get('content-length');
-    if (contentLength && parseInt(contentLength) > 10 * 1024 * 1024) { // 10MB limit
+    const maxSize = 50 * 1024 * 1024; // 50MB limit for large CSV files
+    
+    if (contentLength && parseInt(contentLength) > maxSize) {
       return Response.json({ 
-        error: 'File too large. Maximum file size is 10MB.' 
+        error: `File too large. Maximum file size is ${maxSize / (1024 * 1024)}MB.` 
       }, { status: 413 });
     }
     
@@ -60,45 +65,79 @@ export async function POST(req: NextRequest) {
     const chunks = chunkText(text, 1000, 100);
     console.log(`Created ${chunks.length} chunks`);
     
+    // Warn if too many chunks (potential performance issue)
+    if (chunks.length > 200) {
+      console.warn(`Large number of chunks detected: ${chunks.length}. This may take longer to process.`);
+    }
+    
+    // Limit maximum chunks to prevent server overload
+    if (chunks.length > 500) {
+      return Response.json({ 
+        error: `File too complex. Generated ${chunks.length} chunks, but maximum allowed is 500. Please consider splitting the file or reducing content size.` 
+      }, { status: 413 });
+    }
+    
     // Connect to database
     const connection = postgres(env.DATABASE_URL, { max: 1 });
     const db = drizzle(connection);
 
     try {
       const results = [];
+      const batchSize = 5; // Process in smaller batches to avoid timeouts
       
-      for (let i = 0; i < chunks.length; i++) {
-        const chunk = chunks[i].trim();
-        console.log(`Processing chunk ${i + 1}/${chunks.length}`);
+      console.log(`Processing ${chunks.length} chunks in batches of ${batchSize}`);
+      
+      // Process chunks in batches to avoid memory/timeout issues
+      for (let batchStart = 0; batchStart < chunks.length; batchStart += batchSize) {
+        const batchEnd = Math.min(batchStart + batchSize, chunks.length);
+        const batch = chunks.slice(batchStart, batchEnd);
         
-        // Create resource record
-        const resourceId = nanoid();
-        await db.insert(resources).values({
-          id: resourceId,
-          bucketId,
-          fileName: file.name,
-          fileType: file.type || 'text/plain',
-          fileSize: file.size,
-          content: chunk,
-          chunkIndex: i,
-          totalChunks: chunks.length,
-        });
-
-        // Generate and store embedding
-        console.log(`Generating embedding for chunk ${i + 1}`);
-        const embedding = await generateEmbedding(chunk);
+        console.log(`Processing batch ${Math.floor(batchStart / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)} (chunks ${batchStart + 1}-${batchEnd})`);
         
-        await db.insert(embeddings).values({
-          resourceId,
-          content: chunk,
-          embedding,
-        });
-
-        results.push({
-          resourceId,
-          chunkIndex: i,
-          contentLength: chunk.length
-        });
+        // Prepare batch data
+        const resourceBatch = [];
+        const embeddingBatch = [];
+        
+        for (let i = 0; i < batch.length; i++) {
+          const globalIndex = batchStart + i;
+          const chunk = batch[i].trim();
+          const resourceId = nanoid();
+          
+          // Prepare resource record
+          resourceBatch.push({
+            id: resourceId,
+            bucketId,
+            fileName: file.name,
+            fileType: file.type || 'text/plain',
+            fileSize: file.size,
+            content: chunk,
+            chunkIndex: globalIndex,
+            totalChunks: chunks.length,
+          });
+          
+          // Generate embedding
+          console.log(`Generating embedding for chunk ${globalIndex + 1}/${chunks.length}`);
+          const embedding = await generateEmbedding(chunk);
+          
+          embeddingBatch.push({
+            resourceId,
+            content: chunk,
+            embedding,
+          });
+          
+          results.push({
+            resourceId,
+            chunkIndex: globalIndex,
+            contentLength: chunk.length
+          });
+        }
+        
+        // Bulk insert resources and embeddings
+        console.log(`Bulk inserting batch of ${resourceBatch.length} records`);
+        await db.insert(resources).values(resourceBatch);
+        await db.insert(embeddings).values(embeddingBatch);
+        
+        console.log(`Completed batch ${Math.floor(batchStart / batchSize) + 1}/${Math.ceil(chunks.length / batchSize)}`);
       }
 
       await connection.end();

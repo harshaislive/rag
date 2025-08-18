@@ -20,6 +20,8 @@ interface ExtractionResult {
     rows?: number;
     columns?: number;
     headers?: string[];
+    isLargeFile?: boolean;
+    sampleSize?: number;
   };
 }
 
@@ -183,7 +185,7 @@ async function extractFromExcel(buffer: Buffer): Promise<ExtractionResult> {
   };
 }
 
-// CSV Extraction with JSON conversion
+// CSV Extraction with optimized processing for large files
 function extractFromCSV(buffer: Buffer): ExtractionResult {
   const csvText = new TextDecoder('utf-8').decode(buffer);
   
@@ -196,32 +198,69 @@ function extractFromCSV(buffer: Buffer): ExtractionResult {
     
     // Get headers from first row
     const headers = parseCSVRow(lines[0]);
-    const jsonData: any[] = [];
+    const totalRows = lines.length - 1; // Exclude header
     
-    // Parse each data row
-    for (let i = 1; i < lines.length; i++) {
-      const values = parseCSVRow(lines[i]);
-      if (values.length === headers.length) {
-        const row: any = {};
-        headers.forEach((header, index) => {
-          row[header] = values[index];
-        });
-        jsonData.push(row);
+    // For large CSV files (>500 rows), optimize processing
+    if (totalRows > 500) {
+      console.log(`Large CSV detected: ${totalRows} rows. Using optimized processing.`);
+      
+      // Create a sample JSON representation with first few rows
+      const sampleSize = Math.min(10, totalRows);
+      const sampleData: any[] = [];
+      
+      for (let i = 1; i <= sampleSize; i++) {
+        const values = parseCSVRow(lines[i]);
+        if (values.length === headers.length) {
+          const row: any = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index];
+          });
+          sampleData.push(row);
+        }
       }
+      
+      // Create optimized searchable text
+      const sampleJsonString = JSON.stringify(sampleData, null, 2);
+      const searchableText = `CSV Data (${totalRows} rows):\nHeaders: ${headers.join(', ')}\n\nSample Data (first ${sampleSize} rows):\n${sampleJsonString}\n\nFull CSV Content:\n${csvText}`;
+      
+      return {
+        text: searchableText,
+        metadata: {
+          rows: totalRows,
+          columns: headers.length,
+          headers: headers,
+          isLargeFile: true,
+          sampleSize: sampleSize
+        }
+      };
+    } else {
+      // For smaller files, use full JSON conversion
+      const jsonData: any[] = [];
+      
+      for (let i = 1; i < lines.length; i++) {
+        const values = parseCSVRow(lines[i]);
+        if (values.length === headers.length) {
+          const row: any = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index];
+          });
+          jsonData.push(row);
+        }
+      }
+      
+      // Create searchable text combining original CSV and JSON structure
+      const jsonString = JSON.stringify(jsonData, null, 2);
+      const searchableText = `CSV Data:\n${csvText}\n\nStructured JSON Format:\n${jsonString}`;
+      
+      return {
+        text: searchableText,
+        metadata: {
+          rows: jsonData.length,
+          columns: headers.length,
+          headers: headers
+        }
+      };
     }
-    
-    // Create searchable text combining original CSV and JSON structure
-    const jsonString = JSON.stringify(jsonData, null, 2);
-    const searchableText = `CSV Data:\n${csvText}\n\nStructured JSON Format:\n${jsonString}`;
-    
-    return {
-      text: searchableText,
-      metadata: {
-        rows: jsonData.length,
-        columns: headers.length,
-        headers: headers
-      }
-    };
   } catch (error) {
     // If parsing fails, return original CSV text
     console.warn('CSV parsing failed, using raw text:', error);
