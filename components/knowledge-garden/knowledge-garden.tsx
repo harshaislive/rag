@@ -39,6 +39,15 @@ interface Document {
   status: 'uploading' | 'processing' | 'completed' | 'error';
   progress?: number;
   isDeleting?: boolean;
+  processingStats?: {
+    stage: 'extracting' | 'chunking' | 'embedding' | 'storing' | 'finalizing';
+    chunksTotal?: number;
+    chunksProcessed?: number;
+    embeddingsGenerated?: number;
+    currentBatch?: number;
+    totalBatches?: number;
+    estimatedTimeLeft?: string;
+  };
 }
 
 interface Bucket {
@@ -165,16 +174,62 @@ export default function KnowledgeGarden() {
         formData.append('file', file);
         formData.append('bucketId', activeBucket);
 
-        // Simulate progress
+        // Enhanced progress simulation with stages
+        let currentStage: 'extracting' | 'chunking' | 'embedding' | 'storing' | 'finalizing' = 'extracting';
+        let stageProgress = 0;
+        
         const progressInterval = setInterval(() => {
           setDocuments(prev => prev.map(doc => {
             if (doc.id === newDoc.id && doc.status === 'uploading') {
-              const newProgress = Math.min((doc.progress || 0) + Math.random() * 8, 85);
-              return { ...doc, progress: newProgress };
+              const currentProgress = doc.progress || 0;
+              let newProgress = currentProgress;
+              let newStats = doc.processingStats;
+              
+              // Stage progression logic
+              if (currentProgress < 15) {
+                currentStage = 'extracting';
+                newProgress = Math.min(currentProgress + Math.random() * 3, 15);
+                newStats = {
+                  stage: currentStage,
+                  estimatedTimeLeft: 'Extracting text from file...'
+                };
+              } else if (currentProgress < 25) {
+                currentStage = 'chunking';
+                newProgress = Math.min(currentProgress + Math.random() * 2, 25);
+                newStats = {
+                  stage: currentStage,
+                  estimatedTimeLeft: 'Breaking content into chunks...'
+                };
+              } else if (currentProgress < 85) {
+                currentStage = 'embedding';
+                newProgress = Math.min(currentProgress + Math.random() * 4, 85);
+                
+                // Simulate embedding progress
+                const totalChunks = Math.floor(file.size / 1000) || 10; // Rough estimate
+                const processedChunks = Math.floor((newProgress - 25) / 60 * totalChunks);
+                const currentBatch = Math.floor(processedChunks / 5) + 1;
+                const totalBatches = Math.ceil(totalChunks / 5);
+                
+                newStats = {
+                  stage: currentStage,
+                  chunksTotal: totalChunks,
+                  chunksProcessed: processedChunks,
+                  embeddingsGenerated: processedChunks,
+                  currentBatch: currentBatch,
+                  totalBatches: totalBatches,
+                  estimatedTimeLeft: `Processing batch ${currentBatch}/${totalBatches}...`
+                };
+              }
+              
+              return { 
+                ...doc, 
+                progress: newProgress,
+                processingStats: newStats
+              };
             }
             return doc;
           }));
-        }, 400);
+        }, 800);
 
         const response = await fetch('/api/upload-working', {
           method: 'POST',
@@ -184,28 +239,56 @@ export default function KnowledgeGarden() {
         clearInterval(progressInterval);
 
         if (response.ok) {
-          // First complete the progress bar
+          // Show storing stage
           setDocuments(prev => prev.map(doc => 
             doc.id === newDoc.id 
-              ? { ...doc, progress: 100 }
+              ? { 
+                  ...doc, 
+                  progress: 95,
+                  processingStats: {
+                    stage: 'storing',
+                    estimatedTimeLeft: 'Saving to database...'
+                  }
+                }
               : doc
           ));
+          
+          // After brief delay, show finalizing
+          setTimeout(() => {
+            setDocuments(prev => prev.map(doc => 
+              doc.id === newDoc.id 
+                ? { 
+                    ...doc, 
+                    progress: 100,
+                    processingStats: {
+                      stage: 'finalizing',
+                      estimatedTimeLeft: 'Completing upload...'
+                    }
+                  }
+                : doc
+            ));
+          }, 200);
           
           // After a short delay, show completed status
           setTimeout(() => {
             setDocuments(prev => prev.map(doc => 
               doc.id === newDoc.id 
-                ? { ...doc, status: 'completed', progress: undefined }
+                ? { 
+                    ...doc, 
+                    status: 'completed', 
+                    progress: undefined,
+                    processingStats: undefined
+                  }
                 : doc
             ));
             toast.success(`${file.name} uploaded successfully`);
-          }, 300);
+          }, 600);
           
           // Finally refresh from server and remove temp document
           setTimeout(async () => {
             await fetchBuckets();
             await fetchDocuments(activeBucket);
-          }, 1500);
+          }, 1800);
         } else {
           const error = await response.json();
           toast.error(error.error || `Failed to upload ${file.name}`);
@@ -437,6 +520,23 @@ export default function KnowledgeGarden() {
         return <X className="h-4 w-4 text-red-600" />;
       default:
         return <Clock className="h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
+  const getStageIcon = (stage?: string) => {
+    switch (stage) {
+      case 'extracting':
+        return <FileText className="h-3 w-3 text-blue-500 animate-pulse" />;
+      case 'chunking':
+        return <div className="h-3 w-3 border border-blue-500 animate-pulse" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 50%, 50% 100%, 0 50%)' }} />;
+      case 'embedding':
+        return <Database className="h-3 w-3 text-purple-500 animate-pulse" />;
+      case 'storing':
+        return <div className="h-3 w-3 bg-green-500 rounded animate-pulse" />;
+      case 'finalizing':
+        return <CheckCircle className="h-3 w-3 text-emerald-500 animate-pulse" />;
+      default:
+        return <Clock className="h-3 w-3 text-muted-foreground animate-spin" />;
     }
   };
 
@@ -685,7 +785,69 @@ export default function KnowledgeGarden() {
                             <span>{doc.uploadDate}</span>
                           </div>
                           {doc.status === 'uploading' && doc.progress !== undefined && (
-                            <Progress value={doc.progress} className="w-32 h-1 mt-1" />
+                            <div className="mt-2 space-y-1">
+                              <div className="flex items-center justify-between text-xs">
+                                <div className="flex items-center gap-1">
+                                  {getStageIcon(doc.processingStats?.stage)}
+                                  <span className="text-muted-foreground">
+                                    {doc.processingStats?.estimatedTimeLeft || 'Processing...'}
+                                  </span>
+                                </div>
+                                <span className="text-muted-foreground">
+                                  {Math.round(doc.progress)}%
+                                </span>
+                              </div>
+                              <Progress value={doc.progress} className="w-full h-2" />
+                              
+                              {/* Stage Progress Indicators */}
+                              <div className="flex items-center justify-between mt-1">
+                                {['extracting', 'chunking', 'embedding', 'storing', 'finalizing'].map((stage, index) => {
+                                  const isCompleted = doc.processingStats?.stage && 
+                                    ['extracting', 'chunking', 'embedding', 'storing', 'finalizing'].indexOf(doc.processingStats.stage) > index;
+                                  const isCurrent = doc.processingStats?.stage === stage;
+                                  
+                                  return (
+                                    <div key={stage} className="flex flex-col items-center">
+                                      <div className={cn(
+                                        "w-2 h-2 rounded-full transition-all duration-300",
+                                        isCompleted ? "bg-emerald-500" : 
+                                        isCurrent ? "bg-blue-500 animate-pulse" : 
+                                        "bg-gray-300"
+                                      )} />
+                                      <span className={cn(
+                                        "text-xs capitalize mt-1 transition-colors duration-300",
+                                        isCompleted ? "text-emerald-600" : 
+                                        isCurrent ? "text-blue-600" : 
+                                        "text-gray-400"
+                                      )}>
+                                        {stage.charAt(0).toUpperCase()}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {doc.processingStats && doc.processingStats.stage === 'embedding' && (
+                                <div className="text-xs text-muted-foreground space-y-1">
+                                  {doc.processingStats.chunksTotal && (
+                                    <div className="flex justify-between">
+                                      <span>Chunks: {doc.processingStats.chunksProcessed || 0}/{doc.processingStats.chunksTotal}</span>
+                                      <span>Embeddings: {doc.processingStats.embeddingsGenerated || 0}</span>
+                                    </div>
+                                  )}
+                                  {doc.processingStats.currentBatch && doc.processingStats.totalBatches && (
+                                    <div className="flex justify-between">
+                                      <span>Batch: {doc.processingStats.currentBatch}/{doc.processingStats.totalBatches}</span>
+                                      <span>
+                                        {doc.processingStats.chunksTotal && doc.processingStats.chunksProcessed ? 
+                                          `${doc.processingStats.chunksTotal - doc.processingStats.chunksProcessed} left` : 
+                                          'Processing...'
+                                        }
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                         
