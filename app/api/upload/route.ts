@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { chunkText } from '@/lib/text-extraction';
+import { chunkText } from '@/lib/text-extraction-comprehensive';
 import { generateEmbedding } from '@/lib/ai/embedding';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
