@@ -258,9 +258,9 @@ export default function ChatInterface() {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages } = useChat({
+  const { messages, input, handleInputChange, handleSubmit: originalHandleSubmit, isLoading, reload, setMessages } = useChat({
     body: {
-      toolChoice: toolMode,
+      toolChoice: 'auto', // Always use auto mode on backend
     },
     onToolCall({ toolCall }) {
       setLoadingState('searching');
@@ -277,6 +277,41 @@ export default function ChatInterface() {
       setIsTyping(false);
     },
   });
+
+  // Custom handleSubmit that modifies the input for required mode
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!input.trim() || isLoading) return;
+    
+    // Modify the input if in required mode
+    const modifiedInput = toolMode === 'required' 
+      ? `${input.trim()}\n\nOnly check my database and don't use your personal knowledge.`
+      : input.trim();
+    
+    // Create a synthetic event with modified input
+    const modifiedEvent = {
+      ...e,
+      target: {
+        ...e.target,
+        value: modifiedInput
+      }
+    } as React.FormEvent<HTMLFormElement>;
+    
+    // Temporarily modify the input value
+    const originalValue = input;
+    handleInputChange({ target: { value: modifiedInput } } as any);
+    
+    // Submit with modified input
+    originalHandleSubmit(modifiedEvent);
+    
+    // Reset input to original for display (this happens after submit anyway)
+    setTimeout(() => {
+      if (input === modifiedInput) {
+        handleInputChange({ target: { value: '' } } as any);
+      }
+    }, 100);
+  };
 
   // Enhanced loading state management with better transitions
   useEffect(() => {
