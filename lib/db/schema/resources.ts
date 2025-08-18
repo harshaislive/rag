@@ -16,7 +16,7 @@ export const resources = pgTable("resources", {
   
   // Document metadata
   fileName: varchar("file_name", { length: 255 }).notNull(),
-  fileType: varchar("file_type", { length: 50 }).notNull(), // pdf, docx, txt
+  fileType: varchar("file_type", { length: 100 }).notNull(), // pdf, docx, txt
   fileSize: integer("file_size"), // in bytes
   description: text("description"), // document description
   uploadedBy: varchar("uploaded_by", { length: 255 }), // who uploaded

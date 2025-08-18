@@ -1,0 +1,1 @@
+ALTER TABLE "resources" ALTER COLUMN "file_type" SET DATA TYPE varchar(100);
