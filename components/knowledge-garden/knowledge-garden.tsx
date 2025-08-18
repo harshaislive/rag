@@ -183,13 +183,19 @@ export default function KnowledgeGarden() {
 
         if (response.ok) {
           toast.success(`${file.name} uploaded successfully`);
+          
+          // Update the local document to completed status first
           setDocuments(prev => prev.map(doc => 
             doc.id === newDoc.id 
-              ? { ...doc, status: 'completed', progress: undefined }
+              ? { ...doc, status: 'completed', progress: 100 }
               : doc
           ));
-          await fetchBuckets();
-          await fetchDocuments(activeBucket);
+          
+          // Wait a moment to show completion, then refresh from server
+          setTimeout(async () => {
+            await fetchBuckets();
+            await fetchDocuments(activeBucket);
+          }, 1000);
         } else {
           const error = await response.json();
           toast.error(error.error || `Failed to upload ${file.name}`);
@@ -211,20 +217,29 @@ export default function KnowledgeGarden() {
   };
 
   const deleteDocument = async (documentId: string, fileName: string) => {
-    if (!confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`)) {
+    console.log('Delete document called:', documentId, fileName);
+    
+    const confirmDelete = confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`);
+    console.log('User confirmed deletion:', confirmDelete);
+    
+    if (!confirmDelete) {
       return;
     }
 
     try {
+      console.log('Making DELETE request to:', `/api/documents/${documentId}`);
       const response = await fetch(`/api/documents/${documentId}`, {
         method: 'DELETE',
       });
 
+      console.log('Delete response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('Delete response data:', data);
         toast.success(`Successfully deleted ${fileName}`);
         
-        // Remove document from local state
+        // Remove document from local state immediately
         setDocuments(prev => prev.filter(doc => doc.id !== documentId));
         
         // Update bucket document count
@@ -233,8 +248,15 @@ export default function KnowledgeGarden() {
             ? { ...bucket, documentCount: Math.max(0, bucket.documentCount - 1) }
             : bucket
         ));
+        
+        // Refresh data from server after a short delay
+        setTimeout(() => {
+          fetchDocuments(activeBucket);
+          fetchBuckets();
+        }, 500);
       } else {
         const error = await response.json();
+        console.error('Delete error response:', error);
         toast.error(`Failed to delete ${fileName}: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
@@ -273,30 +295,45 @@ export default function KnowledgeGarden() {
 
   const deleteBucket = async (bucketId: string, bucketName: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent bucket selection when clicking delete
+    console.log('Delete bucket called:', bucketId, bucketName);
     
-    if (!confirm(`Are you sure you want to delete bucket "${bucketName}"? This will permanently delete all documents in this bucket. This action cannot be undone.`)) {
+    const confirmDelete = confirm(`Are you sure you want to delete bucket "${bucketName}"? This will permanently delete all documents in this bucket. This action cannot be undone.`);
+    console.log('User confirmed bucket deletion:', confirmDelete);
+    
+    if (!confirmDelete) {
       return;
     }
 
     try {
+      console.log('Making DELETE request to:', `/api/buckets/${bucketId}`);
       const response = await fetch(`/api/buckets/${bucketId}`, {
         method: 'DELETE',
       });
 
+      console.log('Delete bucket response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('Delete bucket response data:', data);
         toast.success(`Successfully deleted bucket "${bucketName}" and ${data.deletedResources} documents`);
         
-        // Remove bucket from local state
+        // Remove bucket from local state immediately
         setBuckets(prev => prev.filter(bucket => bucket.id !== bucketId));
         
         // Clear active bucket if it was the deleted one
         if (activeBucket === bucketId) {
-          setActiveBucket('');
+          const remainingBuckets = buckets.filter(bucket => bucket.id !== bucketId);
+          setActiveBucket(remainingBuckets.length > 0 ? remainingBuckets[0].id : '');
           setDocuments([]);
         }
+        
+        // Refresh data from server after a short delay
+        setTimeout(() => {
+          fetchBuckets();
+        }, 500);
       } else {
         const error = await response.json();
+        console.error('Delete bucket error response:', error);
         toast.error(`Failed to delete bucket: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
