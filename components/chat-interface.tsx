@@ -13,7 +13,7 @@ import ReactMarkdown from "react-markdown";
 import React from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Copy, Send, Bot, User, Search, CheckCircle2, Sparkles, Loader2, FileText, Database, RotateCcw, Settings } from "lucide-react";
+import { Copy, Send, Bot, User, Search, CheckCircle2, Sparkles, Loader2, FileText, Database, RotateCcw, Settings, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 type LoadingState = 'idle' | 'thinking' | 'searching' | 'responding' | 'complete';
@@ -72,14 +72,16 @@ const ModernMessageBubble = ({
   onRegenerate,
   isLatest, 
   isStreaming,
-  isLoading
+  isLoading,
+  isCopied
 }: { 
   message: Message; 
-  onCopy: (text: string) => void;
+  onCopy: (text: string, messageId: string) => void;
   onRegenerate: () => void;
   isLatest: boolean;
   isStreaming: boolean;
   isLoading: boolean;
+  isCopied: boolean;
 }) => {
   const isUser = message.role === "user";
   
@@ -204,11 +206,23 @@ const ModernMessageBubble = ({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => onCopy(message.content)}
-                className="h-7 text-xs"
+                onClick={() => onCopy(message.content, message.id)}
+                className={cn(
+                  "h-7 text-xs transition-all duration-200",
+                  isCopied && "bg-green-50 text-green-700 border-green-200"
+                )}
               >
-                <Copy className="w-3 h-3 mr-1.5" />
-                Copy
+                {isCopied ? (
+                  <>
+                    <Check className="w-3 h-3 mr-1.5" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3 mr-1.5" />
+                    Copy
+                  </>
+                )}
               </Button>
               {isLatest && (
                 <Button
@@ -241,6 +255,7 @@ export default function ChatInterface() {
   const [streamingText, setStreamingText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [toolMode, setToolMode] = useState<'auto' | 'required'>('auto');
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages } = useChat({
@@ -295,10 +310,16 @@ export default function ChatInterface() {
     return () => clearTimeout(timeoutId);
   }, [messages]);
 
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (text: string, messageId: string) => {
     try {
       await navigator.clipboard.writeText(text);
+      setCopiedMessageId(messageId);
       toast.success("Copied to clipboard!");
+      
+      // Reset the visual indicator after 2 seconds
+      setTimeout(() => {
+        setCopiedMessageId(null);
+      }, 2000);
     } catch {
       toast.error("Failed to copy");
     }
@@ -421,6 +442,7 @@ export default function ChatInterface() {
                     isLatest={index === messages.length - 1}
                     isStreaming={isCurrentlyStreaming && index === messages.length - 1}
                     isLoading={isLoading}
+                    isCopied={copiedMessageId === message.id}
                   />
                 ))}
 
