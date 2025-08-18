@@ -19,13 +19,25 @@ export async function POST(req: NextRequest) {
     const contentLength = req.headers.get('content-length');
     const maxSize = 50 * 1024 * 1024; // 50MB limit for large CSV files
     
+    console.log(`Request content length: ${contentLength} bytes (${contentLength ? (parseInt(contentLength) / 1024 / 1024).toFixed(2) : 'unknown'} MB)`);
+    
     if (contentLength && parseInt(contentLength) > maxSize) {
+      console.log(`File too large: ${contentLength} bytes > ${maxSize} bytes`);
       return Response.json({ 
-        error: `File too large. Maximum file size is ${maxSize / (1024 * 1024)}MB.` 
+        error: `File too large. Maximum file size is ${maxSize / (1024 * 1024)}MB. Your file is ${(parseInt(contentLength) / 1024 / 1024).toFixed(2)}MB.` 
       }, { status: 413 });
     }
     
-    const formData = await req.formData();
+    let formData: FormData;
+    try {
+      formData = await req.formData();
+    } catch (error) {
+      console.error('Error parsing form data:', error);
+      return Response.json({ 
+        error: 'Failed to parse upload data. File may be too large or corrupted.' 
+      }, { status: 413 });
+    }
+
     const file = formData.get('file') as File;
     const bucketId = formData.get('bucketId') as string;
     
@@ -38,6 +50,14 @@ export async function POST(req: NextRequest) {
     }
 
     console.log(`File received: ${file.name} (${file.type}, ${file.size} bytes) for bucket: ${bucketId}`);
+
+    // Additional file size check after parsing
+    if (file.size > maxSize) {
+      console.log(`File too large after parsing: ${file.size} bytes > ${maxSize} bytes`);
+      return Response.json({ 
+        error: `File too large. Maximum file size is ${maxSize / (1024 * 1024)}MB. Your file is ${(file.size / 1024 / 1024).toFixed(2)}MB.` 
+      }, { status: 413 });
+    }
 
     // Extract text from file using comprehensive extraction utility
     let text = '';
