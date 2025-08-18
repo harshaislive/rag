@@ -16,6 +16,9 @@ const azure = createAzure({
 export async function POST(req: Request) {
   const { messages, toolChoice = 'auto' } = await req.json();
   
+  console.log('API Route - toolChoice:', toolChoice);
+  console.log('API Route - last message:', messages[messages.length - 1]);
+  
   // Modify the last user message if in required mode
   const modifiedMessages = toolChoice === 'required' && messages.length > 0 && messages[messages.length - 1].role === 'user' 
     ? [
@@ -27,11 +30,15 @@ export async function POST(req: Request) {
       ]
     : messages;
   
+  if (toolChoice === 'required') {
+    console.log('Modified last message:', modifiedMessages[modifiedMessages.length - 1]);
+  }
+  
   const result = streamText({
     model: azure(env.AZURE_OPENAI_DEPLOYMENT),
     messages: modifiedMessages,
     maxSteps: 5,
-    toolChoice,
+    toolChoice: toolChoice === 'required' ? 'required' : 'auto',
     system: `You are a helpful assistant with access to a knowledge base. Be helpful and conversational.`,
     tools: {
       addResource: tool({
