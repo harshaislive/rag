@@ -284,33 +284,23 @@ export default function ChatInterface() {
     
     if (!input.trim() || isLoading) return;
     
+    // Store original input
+    const originalInput = input.trim();
+    
     // Modify the input if in required mode
-    const modifiedInput = toolMode === 'required' 
-      ? `${input.trim()}\n\nOnly check my database and don't use your personal knowledge.`
-      : input.trim();
-    
-    // Create a synthetic event with modified input
-    const modifiedEvent = {
-      ...e,
-      target: {
-        ...e.target,
-        value: modifiedInput
-      }
-    } as React.FormEvent<HTMLFormElement>;
-    
-    // Temporarily modify the input value
-    const originalValue = input;
-    handleInputChange({ target: { value: modifiedInput } } as any);
-    
-    // Submit with modified input
-    originalHandleSubmit(modifiedEvent);
-    
-    // Reset input to original for display (this happens after submit anyway)
-    setTimeout(() => {
-      if (input === modifiedInput) {
-        handleInputChange({ target: { value: '' } } as any);
-      }
-    }, 100);
+    if (toolMode === 'required') {
+      const modifiedInput = `${originalInput}\n\nOnly check my database and don't use your personal knowledge.`;
+      // Update the input field temporarily
+      handleInputChange({ target: { value: modifiedInput } } as React.ChangeEvent<HTMLInputElement>);
+      
+      // Submit after input is updated
+      setTimeout(() => {
+        originalHandleSubmit(e);
+      }, 0);
+    } else {
+      // Normal submission for auto mode
+      originalHandleSubmit(e);
+    }
   };
 
   // Enhanced loading state management with better transitions
