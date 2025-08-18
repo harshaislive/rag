@@ -15,6 +15,13 @@
       "when": 1755150312919,
       "tag": "0001_tidy_toro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1755511339212,
+      "tag": "0002_youthful_triathlon",
+      "breakpoints": true
     }
   ]
 }

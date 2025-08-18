@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Upload, 
   File, 
@@ -39,6 +40,9 @@ interface Document {
   status: 'uploading' | 'processing' | 'completed' | 'error';
   progress?: number;
   isDeleting?: boolean;
+  description?: string;
+  uploadedBy?: string;
+  brand?: string;
   processingStats?: {
     stage: 'extracting' | 'chunking' | 'embedding' | 'storing' | 'finalizing';
     chunksTotal?: number;
@@ -73,6 +77,13 @@ export default function KnowledgeGarden() {
   const [isCreating, setIsCreating] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploadForm, setUploadForm] = useState({
+    files: null as FileList | null,
+    description: '',
+    uploadedBy: '',
+    brand: 'Beforest' as 'Beforest' | 'Bewild' | 'Belong Stays'
+  });
 
   // Fetch buckets from database
   const fetchBuckets = useCallback(async () => {
@@ -149,13 +160,15 @@ export default function KnowledgeGarden() {
     }
   };
 
-  const handleFiles = async (files: FileList) => {
-    if (!activeBucket) {
-      toast.error('Please select a knowledge bucket first');
+  const handleUploadSubmit = async () => {
+    if (!activeBucket || !uploadForm.files || uploadForm.files.length === 0) {
+      toast.error('Please select files and fill required fields');
       return;
     }
 
-    for (const file of Array.from(files)) {
+    setUploadDialogOpen(false);
+    
+    for (const file of Array.from(uploadForm.files)) {
       const newDoc: Document = {
         id: Date.now().toString() + Math.random(),
         bucketId: activeBucket,
@@ -173,6 +186,9 @@ export default function KnowledgeGarden() {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('bucketId', activeBucket);
+        formData.append('description', uploadForm.description);
+        formData.append('uploadedBy', uploadForm.uploadedBy);
+        formData.append('brand', uploadForm.brand);
 
         // Enhanced progress simulation with stages
         let currentStage: 'extracting' | 'chunking' | 'embedding' | 'storing' | 'finalizing' = 'extracting';
@@ -307,6 +323,20 @@ export default function KnowledgeGarden() {
         ));
       }
     }
+    
+    // Reset form
+    setUploadForm({
+      files: null,
+      description: '',
+      uploadedBy: '',
+      brand: 'Beforest'
+    });
+  };
+
+  // Simple file handler for drag and drop
+  const handleFiles = async (files: FileList) => {
+    setUploadForm(prev => ({ ...prev, files }));
+    setUploadDialogOpen(true);
   };
 
   const deleteDocument = async (documentId: string, fileName: string) => {
@@ -727,7 +757,7 @@ export default function KnowledgeGarden() {
                   {/* Upload Button */}
                   <Button 
                     size="sm"
-                    onClick={() => document.getElementById('file-upload')?.click()}
+                    onClick={() => setUploadDialogOpen(true)}
                     disabled={!activeBucket}
                     className="h-7 sm:h-8 text-xs"
                   >
@@ -783,7 +813,14 @@ export default function KnowledgeGarden() {
                             <span>{doc.fileType}</span>
                             <span>{doc.fileSize}</span>
                             <span>{doc.uploadDate}</span>
+                            {doc.brand && <Badge variant="outline" className="text-xs">{doc.brand}</Badge>}
                           </div>
+                          {doc.description && (
+                            <p className="text-xs text-muted-foreground mt-1 truncate">{doc.description}</p>
+                          )}
+                          {doc.uploadedBy && (
+                            <p className="text-xs text-muted-foreground">By: {doc.uploadedBy}</p>
+                          )}
                           {doc.status === 'uploading' && doc.progress !== undefined && (
                             <div className="mt-2 space-y-1">
                               <div className="flex items-center justify-between text-xs">
@@ -889,19 +926,100 @@ export default function KnowledgeGarden() {
         </div>
       </div>
 
-      {/* Hidden File Input */}
-      <Input
-        type="file"
-        multiple
-        accept=".txt,.pdf,.doc,.docx,.csv,.json,.xls,.xlsx,.html,.xml"
-        className="hidden"
-        onChange={(e) => {
-          if (e.target.files) {
-            handleFiles(e.target.files);
-          }
-        }}
-        id="file-upload"
-      />
+      {/* Upload Dialog */}
+      <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Upload Documents</DialogTitle>
+            <DialogDescription>
+              Add files to your knowledge bucket with additional information.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            {/* File Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="file-input">Select Files</Label>
+              <Input
+                id="file-input"
+                type="file"
+                multiple
+                accept=".txt,.pdf,.doc,.docx,.csv,.json,.xls,.xlsx,.html,.xml"
+                onChange={(e) => {
+                  setUploadForm(prev => ({ ...prev, files: e.target.files }));
+                }}
+                className="cursor-pointer"
+              />
+              {uploadForm.files && (
+                <p className="text-sm text-muted-foreground">
+                  {uploadForm.files.length} file(s) selected
+                </p>
+              )}
+            </div>
+
+            {/* Description */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                placeholder="Describe the content or purpose of these documents..."
+                value={uploadForm.description}
+                onChange={(e) => setUploadForm(prev => ({ ...prev, description: e.target.value }))}
+                rows={3}
+              />
+            </div>
+
+            {/* Uploaded By */}
+            <div className="space-y-2">
+              <Label htmlFor="uploaded-by">Uploaded By</Label>
+              <Input
+                id="uploaded-by"
+                placeholder="Your name or team"
+                value={uploadForm.uploadedBy}
+                onChange={(e) => setUploadForm(prev => ({ ...prev, uploadedBy: e.target.value }))}
+              />
+            </div>
+
+            {/* Brand Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="brand">Brand</Label>
+              <Select 
+                value={uploadForm.brand} 
+                onValueChange={(value) => setUploadForm(prev => ({ ...prev, brand: value as 'Beforest' | 'Bewild' | 'Belong Stays' }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Beforest">Beforest</SelectItem>
+                  <SelectItem value="Bewild">Bewild</SelectItem>
+                  <SelectItem value="Belong Stays">Belong Stays</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setUploadDialogOpen(false);
+                setUploadForm({ files: null, description: '', uploadedBy: '', brand: 'Beforest' });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleUploadSubmit}
+              disabled={!uploadForm.files || uploadForm.files.length === 0}
+            >
+              Upload {uploadForm.files ? `(${uploadForm.files.length})` : ''}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

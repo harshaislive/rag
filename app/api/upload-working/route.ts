@@ -40,6 +40,9 @@ export async function POST(req: NextRequest) {
 
     const file = formData.get('file') as File;
     const bucketId = formData.get('bucketId') as string;
+    const description = formData.get('description') as string || '';
+    const uploadedBy = formData.get('uploadedBy') as string || '';
+    const brand = formData.get('brand') as string || 'Beforest';
     
     if (!file) {
       return Response.json({ error: 'No file provided' }, { status: 400 });
@@ -134,6 +137,9 @@ export async function POST(req: NextRequest) {
             fileName: file.name,
             fileType: file.type || 'text/plain',
             fileSize: file.size,
+            description,
+            uploadedBy,
+            brand,
             content: chunk,
             chunkIndex: globalIndex,
             totalChunks: chunks.length,

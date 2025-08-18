@@ -18,6 +18,9 @@ export const resources = pgTable("resources", {
   fileName: varchar("file_name", { length: 255 }).notNull(),
   fileType: varchar("file_type", { length: 50 }).notNull(), // pdf, docx, txt
   fileSize: integer("file_size"), // in bytes
+  description: text("description"), // document description
+  uploadedBy: varchar("uploaded_by", { length: 255 }), // who uploaded
+  brand: varchar("brand", { length: 50 }), // Beforest, Bewild, Belong Stays
   
   // Extracted text content (no file storage)
   content: text("content").notNull(),
