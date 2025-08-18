@@ -19,34 +19,13 @@ export async function POST(req: Request) {
   const result = streamText({
     model: azure(env.AZURE_OPENAI_DEPLOYMENT),
     messages,
-    maxSteps: 2,
+    maxSteps: 5,
     toolChoice,
     system: `You are a helpful assistant with access to a knowledge base.
 
-TOOL CHOICE MODE: ${toolChoice.toUpperCase()}
+${toolChoice === 'required' ? 'Only check my database and don\'t use your personal knowledge. Use the knowledge base for all information.' : 'Use tools intelligently when needed - for simple questions you can use your knowledge, for document-specific questions search the knowledge base.'}
 
-${toolChoice === 'required' ? `
-**REQUIRED MODE** - Always search knowledge base first, then provide helpful answers:
-1. Use getInformation tool to search for relevant context
-2. After getting search results, ALWAYS provide a complete answer based on the findings
-3. If no relevant information is found, still provide a helpful response
-4. Don't get stuck searching - one tool call per response, then answer
-
-IMPORTANT: After using tools, you must provide a conversational response to the user.
-
-` : `
-**AUTO MODE** - Use tools intelligently when needed:
-1. **For simple greetings and casual questions**: Respond directly without tools
-2. **For document search and content questions**: Use getInformation tool  
-3. **For saving new information**: Use addResource tool
-
-EXAMPLES:
-- "Hello" → Direct response
-- "How are you?" → Direct response  
-- "What's in my documents?" → getInformation tool
-- "Tell me about uploaded files" → getInformation tool
-
-`}Be helpful and conversational while following the tool usage mode.`,
+Be helpful and conversational.`,
     tools: {
       addResource: tool({
         description: `Add a resource to your knowledge base when the user provides new information`,
