@@ -1,5 +1,6 @@
 import { createResource } from "@/lib/actions/resources";
 import { findRelevantContent } from "@/lib/ai/embedding";
+import { executeDataAnalysis } from "@/lib/actions/sql-analysis";
 import { createAzure } from "@ai-sdk/azure";
 import { generateObject, streamText, tool } from "ai";
 import { z } from "zod";
@@ -20,11 +21,29 @@ export async function POST(req: Request) {
     model: azure(env.AZURE_OPENAI_DEPLOYMENT),
     messages,
     maxSteps: 5,
-    system: `You are a helpful assistant that has access to a knowledge base.
-When answering questions, use the getInformation tool to search for relevant information first.
-If the user provides new information, use the addResource tool to store it.
-Answer questions based on the information you find, and provide helpful responses.
-If you can't find relevant information, let the user know and offer to help in other ways.`,
+    system: `You are a helpful assistant with access to a knowledge base and advanced data analysis capabilities.
+
+TOOL USAGE GUIDELINES:
+1. **For general questions and document search**: Use getInformation tool
+2. **For data analysis questions** (duplicates, statistics, counts, patterns): Use analyzeData tool
+3. **For specific duplicate detection**: Use findDuplicates tool  
+4. **For statistical analysis**: Use getStatistics tool
+5. **For new information**: Use addResource tool
+
+DATA ANALYSIS CAPABILITIES:
+- Detect duplicates in CSV data across all columns or specific fields
+- Calculate statistics (count, sum, average, min/max) for numerical data
+- Find top/bottom values, unique counts, and data distributions  
+- Perform multi-query analysis for complex questions
+- Intelligent routing between SQL analysis and document search
+
+EXAMPLES:
+- "Find duplicates in my data" → Use findDuplicates or analyzeData
+- "How many unique customers?" → Use analyzeData or getStatistics
+- "What's the average sales by region?" → Use getStatistics
+- "Tell me about this document" → Use getInformation
+
+Always explain your analysis approach and provide clear, actionable insights.`,
     tools: {
       addResource: tool({
         description: `Add a resource to your knowledge base when the user provides new information`,
@@ -55,6 +74,49 @@ If you can't find relevant information, let the user know and offer to help in o
             new Map(results.flat().map((item) => [item?.name, item])).values()
           );
           return uniqueResults;
+        },
+      }),
+      analyzeData: tool({
+        description: `Analyze CSV data with intelligent SQL queries for quantitative questions like duplicates, statistics, counts, aggregations, and patterns. Use this for data analysis questions that require numerical calculations or structured analysis.`,
+        parameters: z.object({
+          query: z.string().describe("The data analysis question or request"),
+          bucketId: z.string().optional().describe("Specific bucket ID to analyze (if known)"),
+          analysisType: z.enum(['auto', 'sql', 'rag']).optional().describe("Type of analysis to perform - 'auto' for intelligent detection, 'sql' for data queries, 'rag' for document search"),
+        }),
+        execute: async ({ query, bucketId, analysisType = 'auto' }) => {
+          const result = await executeDataAnalysis({ query, bucketId, analysisType });
+          return result;
+        },
+      }),
+      findDuplicates: tool({
+        description: `Specifically find duplicate records in CSV data. Optimized for duplicate detection across all columns or specific fields.`,
+        parameters: z.object({
+          bucketId: z.string().optional().describe("Bucket ID containing the CSV data"),
+          fileName: z.string().optional().describe("Specific CSV file name to analyze"),
+        }),
+        execute: async ({ bucketId, fileName }) => {
+          const query = "Find all duplicate records in this data";
+          const result = await executeDataAnalysis({ 
+            query, 
+            bucketId, 
+            analysisType: 'sql' 
+          });
+          return result;
+        },
+      }),
+      getStatistics: tool({
+        description: `Get statistical analysis of CSV data including counts, averages, sums, min/max values, and distributions.`,
+        parameters: z.object({
+          query: z.string().describe("Statistical analysis request (e.g., 'average sales by region', 'count of unique customers')"),
+          bucketId: z.string().optional().describe("Bucket ID containing the data"),
+        }),
+        execute: async ({ query, bucketId }) => {
+          const result = await executeDataAnalysis({ 
+            query, 
+            bucketId, 
+            analysisType: 'sql' 
+          });
+          return result;
         },
       }),
     },
