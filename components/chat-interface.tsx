@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Message } from "ai";
 import { useChat } from "ai/react";
 import { useEffect, useState, useRef } from "react";
@@ -12,7 +13,7 @@ import ReactMarkdown from "react-markdown";
 import React from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Copy, Send, Bot, User, Search, CheckCircle2, Sparkles, Loader2, FileText, Database, RotateCcw } from "lucide-react";
+import { Copy, Send, Bot, User, Search, CheckCircle2, Sparkles, Loader2, FileText, Database, RotateCcw, Settings } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 type LoadingState = 'idle' | 'thinking' | 'searching' | 'responding' | 'complete';
@@ -239,9 +240,13 @@ export default function ChatInterface() {
   const [loadingState, setLoadingState] = useState<LoadingState>('idle');
   const [streamingText, setStreamingText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [toolMode, setToolMode] = useState<'auto' | 'required'>('auto');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages } = useChat({
+    body: {
+      toolChoice: toolMode,
+    },
     onToolCall({ toolCall }) {
       setLoadingState('searching');
     },
@@ -330,13 +335,42 @@ export default function ChatInterface() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Status indicator in top-right when needed */}
-      {shouldShowLoadingMessage && (
-        <div className="absolute top-4 right-4 z-10 flex items-center space-x-2 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm rounded-full px-3 py-1.5 border shadow-sm">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          <span>{loadingState === 'thinking' ? 'Thinking' : loadingState === 'searching' ? 'Searching' : 'Responding'}...</span>
+      {/* Tool Mode Toggle and Status in top-right */}
+      <div className="absolute top-4 right-4 z-10 flex items-center gap-3">
+        {/* Tool Mode Toggle */}
+        <div className="flex items-center space-x-2 text-xs bg-background/80 backdrop-blur-sm rounded-full px-3 py-1.5 border shadow-sm">
+          <Settings className="h-3 w-3 text-muted-foreground" />
+          <span className="text-muted-foreground">Tools:</span>
+          <span className={cn(
+            "font-medium transition-colors",
+            toolMode === 'auto' ? "text-blue-600" : "text-muted-foreground"
+          )}>
+            Auto
+          </span>
+          <Switch
+            checked={toolMode === 'required'}
+            onCheckedChange={(checked) => {
+              setToolMode(checked ? 'required' : 'auto');
+              toast.success(`Tool mode: ${checked ? 'Required' : 'Auto'}`);
+            }}
+            className="scale-75"
+          />
+          <span className={cn(
+            "font-medium transition-colors",
+            toolMode === 'required' ? "text-orange-600" : "text-muted-foreground"
+          )}>
+            Required
+          </span>
         </div>
-      )}
+
+        {/* Status indicator when loading */}
+        {shouldShowLoadingMessage && (
+          <div className="flex items-center space-x-2 text-xs text-muted-foreground bg-background/80 backdrop-blur-sm rounded-full px-3 py-1.5 border shadow-sm">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>{loadingState === 'thinking' ? 'Thinking' : loadingState === 'searching' ? 'Searching' : 'Responding'}...</span>
+          </div>
+        )}
+      </div>
 
       {/* Reverse Layout Container - Vercel Style */}
       <div className="flex flex-col-reverse h-full">

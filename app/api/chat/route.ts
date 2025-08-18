@@ -14,15 +14,26 @@ const azure = createAzure({
 });
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  const { messages, toolChoice = 'auto' } = await req.json();
   
   const result = streamText({
     model: azure(env.AZURE_OPENAI_DEPLOYMENT),
     messages,
     maxSteps: 5,
+    toolChoice,
     system: `You are a helpful assistant with access to a knowledge base.
 
-TOOL USAGE GUIDELINES:
+TOOL CHOICE MODE: ${toolChoice.toUpperCase()}
+
+${toolChoice === 'required' ? `
+**REQUIRED MODE** - You MUST use at least one tool for every response:
+- For document questions: Use getInformation tool
+- For general questions: Use getInformation to search for relevant context first
+- For new information: Use addResource tool
+- Always try to find relevant information using tools before responding
+
+` : `
+**AUTO MODE** - Use tools intelligently when needed:
 1. **For simple greetings and casual questions**: Respond directly without tools
 2. **For document search and content questions**: Use getInformation tool  
 3. **For saving new information**: Use addResource tool
@@ -33,7 +44,7 @@ EXAMPLES:
 - "What's in my documents?" → getInformation tool
 - "Tell me about uploaded files" → getInformation tool
 
-Be helpful and conversational while using tools only when needed.`,
+`}Be helpful and conversational while following the tool usage mode.`,
     tools: {
       addResource: tool({
         description: `Add a resource to your knowledge base when the user provides new information`,
