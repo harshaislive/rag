@@ -16,16 +16,23 @@ const azure = createAzure({
 export async function POST(req: Request) {
   const { messages, toolChoice = 'auto' } = await req.json();
   
+  // Modify the last user message if in required mode
+  const modifiedMessages = toolChoice === 'required' && messages.length > 0 && messages[messages.length - 1].role === 'user' 
+    ? [
+        ...messages.slice(0, -1),
+        {
+          ...messages[messages.length - 1],
+          content: `${messages[messages.length - 1].content}\n\nOnly check my database and don't use your personal knowledge.`
+        }
+      ]
+    : messages;
+  
   const result = streamText({
     model: azure(env.AZURE_OPENAI_DEPLOYMENT),
-    messages,
+    messages: modifiedMessages,
     maxSteps: 5,
     toolChoice,
-    system: `You are a helpful assistant with access to a knowledge base.
-
-${toolChoice === 'required' ? 'Only check my database and don\'t use your personal knowledge. Use the knowledge base for all information.' : 'Use tools intelligently when needed - for simple questions you can use your knowledge, for document-specific questions search the knowledge base.'}
-
-Be helpful and conversational.`,
+    system: `You are a helpful assistant with access to a knowledge base. Be helpful and conversational.`,
     tools: {
       addResource: tool({
         description: `Add a resource to your knowledge base when the user provides new information`,
