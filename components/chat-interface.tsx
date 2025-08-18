@@ -258,9 +258,9 @@ export default function ChatInterface() {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const { messages, input, handleInputChange, handleSubmit: originalHandleSubmit, isLoading, reload, setMessages, append } = useChat({
+  const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages } = useChat({
     body: {
-      toolChoice: 'auto', // Always use auto mode on backend
+      toolMode, // Send the tool mode to backend
     },
     onToolCall({ toolCall }) {
       setLoadingState('searching');
@@ -278,29 +278,6 @@ export default function ChatInterface() {
     },
   });
 
-  // Custom handleSubmit that modifies the input for required mode
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!input.trim() || isLoading) return;
-    
-    // Store original input
-    const originalInput = input.trim();
-    
-    // Modify the input if in required mode
-    const finalInput = toolMode === 'required' 
-      ? `${originalInput}\n\nOnly check my database and don't use your personal knowledge.`
-      : originalInput;
-    
-    // Clear the input field
-    handleInputChange({ target: { value: '' } } as React.ChangeEvent<HTMLInputElement>);
-    
-    // Use append to send the message directly
-    append({
-      role: 'user',
-      content: finalInput,
-    });
-  };
 
   // Enhanced loading state management with better transitions
   useEffect(() => {
