@@ -21,7 +21,9 @@ interface ExtractionResult {
     columns?: number;
     headers?: string[];
     isLargeFile?: boolean;
+    isVeryLarge?: boolean;
     sampleSize?: number;
+    processingType?: 'full' | 'sample' | 'minimal';
   };
 }
 
@@ -204,35 +206,61 @@ function extractFromCSV(buffer: Buffer): ExtractionResult {
     if (totalRows > 500) {
       console.log(`Large CSV detected: ${totalRows} rows. Using optimized processing.`);
       
-      // Create a sample JSON representation with first few rows
-      const sampleSize = Math.min(10, totalRows);
-      const sampleData: any[] = [];
-      
-      for (let i = 1; i <= sampleSize; i++) {
-        const values = parseCSVRow(lines[i]);
-        if (values.length === headers.length) {
-          const row: any = {};
-          headers.forEach((header, index) => {
-            row[header] = values[index];
-          });
-          sampleData.push(row);
+      // For very large files (>2000 rows), use minimal processing
+      if (totalRows > 2000) {
+        console.log(`Very large CSV detected: ${totalRows} rows. Using minimal processing to reduce chunk count.`);
+        
+        // Create a compact representation with headers and row count info
+        const searchableText = `Large CSV Dataset: ${totalRows} rows, ${headers.length} columns\n` +
+          `Headers: ${headers.join(', ')}\n` +
+          `File: ${lines[0]}\n` + // Header row
+          `Sample rows:\n${lines.slice(1, 6).join('\n')}\n` + // First 5 data rows
+          `...[${totalRows - 5} more rows]...\n` +
+          `Last row: ${lines[lines.length - 1]}`;
+        
+        return {
+          text: searchableText,
+          metadata: {
+            rows: totalRows,
+            columns: headers.length,
+            headers: headers,
+            isLargeFile: true,
+            isVeryLarge: true,
+            processingType: 'minimal'
+          }
+        };
+      } else {
+        // For moderately large files (500-2000 rows), use sample approach
+        const sampleSize = Math.min(20, totalRows);
+        const sampleData: any[] = [];
+        
+        for (let i = 1; i <= sampleSize; i++) {
+          const values = parseCSVRow(lines[i]);
+          if (values.length === headers.length) {
+            const row: any = {};
+            headers.forEach((header, index) => {
+              row[header] = values[index];
+            });
+            sampleData.push(row);
+          }
         }
+        
+        // Create optimized searchable text
+        const sampleJsonString = JSON.stringify(sampleData, null, 2);
+        const searchableText = `CSV Data (${totalRows} rows):\nHeaders: ${headers.join(', ')}\n\nSample Data (first ${sampleSize} rows):\n${sampleJsonString}\n\nFull CSV Content:\n${csvText}`;
+        
+        return {
+          text: searchableText,
+          metadata: {
+            rows: totalRows,
+            columns: headers.length,
+            headers: headers,
+            isLargeFile: true,
+            sampleSize: sampleSize,
+            processingType: 'sample'
+          }
+        };
       }
-      
-      // Create optimized searchable text
-      const sampleJsonString = JSON.stringify(sampleData, null, 2);
-      const searchableText = `CSV Data (${totalRows} rows):\nHeaders: ${headers.join(', ')}\n\nSample Data (first ${sampleSize} rows):\n${sampleJsonString}\n\nFull CSV Content:\n${csvText}`;
-      
-      return {
-        text: searchableText,
-        metadata: {
-          rows: totalRows,
-          columns: headers.length,
-          headers: headers,
-          isLargeFile: true,
-          sampleSize: sampleSize
-        }
-      };
     } else {
       // For smaller files, use full JSON conversion
       const jsonData: any[] = [];
@@ -380,7 +408,14 @@ export function chunkText(text: string, maxChunkSize: number = 1000, overlap: nu
   // Detect if this is structured data (JSON, CSV, etc.)
   const isStructuredData = isStructuredContent(text);
   
+  // Use larger chunks for very large structured data to reduce total chunk count
   if (isStructuredData) {
+    // For very large CSV files, use much larger chunks
+    if (text.includes('Large CSV Dataset:') || text.length > 100000) {
+      console.log('Using large chunks for very large structured data');
+      maxChunkSize = Math.max(maxChunkSize, 3000); // Use at least 3000 chars per chunk
+      overlap = Math.min(overlap, 200); // Reduce overlap for efficiency
+    }
     return chunkStructuredData(text, maxChunkSize, overlap);
   } else {
     return chunkUnstructuredText(text, maxChunkSize, overlap);

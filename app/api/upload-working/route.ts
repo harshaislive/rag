@@ -90,10 +90,14 @@ export async function POST(req: NextRequest) {
       console.warn(`Large number of chunks detected: ${chunks.length}. This may take longer to process.`);
     }
     
-    // Limit maximum chunks to prevent server overload
-    if (chunks.length > 500) {
+    // Dynamic chunk limit based on file characteristics
+    const maxChunks = text.includes('Large CSV Dataset:') ? 300 : // Very large CSVs get lower limit
+                      text.includes('CSV Data (') ? 600 :          // Regular large CSVs get higher limit
+                      500;                                         // Default limit for other files
+    
+    if (chunks.length > maxChunks) {
       return Response.json({ 
-        error: `File too complex. Generated ${chunks.length} chunks, but maximum allowed is 500. Please consider splitting the file or reducing content size.` 
+        error: `File too complex. Generated ${chunks.length} chunks, but maximum allowed is ${maxChunks}. Please consider splitting the file or reducing content size.` 
       }, { status: 413 });
     }
     
