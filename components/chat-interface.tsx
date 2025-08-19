@@ -358,7 +358,7 @@ export default function ChatInterface() {
         <div className="flex items-center space-x-2 text-xs bg-blue-50/80 dark:bg-blue-950/30 backdrop-blur-sm rounded-full px-3 py-1.5 border border-blue-200 dark:border-blue-800 shadow-sm">
           <Info className="h-3 w-3 text-blue-600 dark:text-blue-400" />
           <span className="text-blue-700 dark:text-blue-300 font-medium">
-            Tip: Ask to "search my database" or "check my documents" for uploaded content
+            Tip: Ask to &ldquo;search my database&rdquo; or &ldquo;check my documents&rdquo; for uploaded content
           </span>
         </div>
 
