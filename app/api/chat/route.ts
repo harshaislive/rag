@@ -14,24 +14,13 @@ const azure = createAzure({
 });
 
 export async function POST(req: Request) {
-  const { messages, toolMode = 'auto' } = await req.json();
-  
-  // Modify the last user message if in required mode
-  const modifiedMessages = toolMode === 'required' && messages.length > 0 && messages[messages.length - 1].role === 'user' 
-    ? [
-        ...messages.slice(0, -1),
-        {
-          ...messages[messages.length - 1],
-          content: `${messages[messages.length - 1].content}\n\nOnly check my database and don't use your personal knowledge.`
-        }
-      ]
-    : messages;
+  const { messages } = await req.json();
   
   const result = streamText({
     model: azure(env.AZURE_OPENAI_DEPLOYMENT),
-    messages: modifiedMessages,
+    messages,
     maxSteps: 5,
-    toolChoice: toolMode === 'required' ? 'required' : 'auto',
+    toolChoice: 'auto',
     system: `You are a helpful assistant with access to a document knowledge base. 
 
 When users ask questions about documents, uploaded files, or want to search their knowledge base, ALWAYS use the getInformation tool to search for relevant content before responding.

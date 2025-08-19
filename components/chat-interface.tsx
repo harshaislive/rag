@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { Message } from "ai";
 import { useChat } from "ai/react";
 import { useEffect, useState, useRef } from "react";
@@ -13,7 +12,7 @@ import ReactMarkdown from "react-markdown";
 import React from "react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Copy, Send, Bot, User, Search, CheckCircle2, Sparkles, Loader2, FileText, Database, RotateCcw, Settings, Check } from "lucide-react";
+import { Copy, Send, Bot, User, Search, CheckCircle2, Sparkles, Loader2, FileText, Database, RotateCcw, Check, Info } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 type LoadingState = 'idle' | 'thinking' | 'searching' | 'responding' | 'complete';
@@ -254,14 +253,10 @@ export default function ChatInterface() {
   const [loadingState, setLoadingState] = useState<LoadingState>('idle');
   const [streamingText, setStreamingText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [toolMode, setToolMode] = useState<'auto' | 'required'>('auto');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const { messages, input, handleInputChange, handleSubmit, isLoading, reload, setMessages } = useChat({
-    body: {
-      toolMode, // Send the tool mode to backend
-    },
     onToolCall({ toolCall }) {
       setLoadingState('searching');
     },
@@ -359,29 +354,11 @@ export default function ChatInterface() {
     <div className="flex flex-col h-full">
       {/* Tool Mode Toggle and Status in top-right */}
       <div className="absolute top-4 right-4 z-10 flex items-center gap-3">
-        {/* Tool Mode Toggle */}
-        <div className="flex items-center space-x-2 text-xs bg-background/80 backdrop-blur-sm rounded-full px-3 py-1.5 border shadow-sm">
-          <Settings className="h-3 w-3 text-muted-foreground" />
-          <span className="text-muted-foreground">Tools:</span>
-          <span className={cn(
-            "font-medium transition-colors",
-            toolMode === 'auto' ? "text-blue-600" : "text-muted-foreground"
-          )}>
-            Auto
-          </span>
-          <Switch
-            checked={toolMode === 'required'}
-            onCheckedChange={(checked) => {
-              setToolMode(checked ? 'required' : 'auto');
-              toast.success(`Tool mode: ${checked ? 'Required' : 'Auto'}`);
-            }}
-            className="scale-75"
-          />
-          <span className={cn(
-            "font-medium transition-colors",
-            toolMode === 'required' ? "text-orange-600" : "text-muted-foreground"
-          )}>
-            Required
+        {/* Database Search Note */}
+        <div className="flex items-center space-x-2 text-xs bg-blue-50/80 dark:bg-blue-950/30 backdrop-blur-sm rounded-full px-3 py-1.5 border border-blue-200 dark:border-blue-800 shadow-sm">
+          <Info className="h-3 w-3 text-blue-600 dark:text-blue-400" />
+          <span className="text-blue-700 dark:text-blue-300 font-medium">
+            Tip: Ask to "search my database" or "check my documents" for uploaded content
           </span>
         </div>
 
