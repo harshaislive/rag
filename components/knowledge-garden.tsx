@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Upload, FileText, File, X, CheckCircle } from "lucide-react";
+import { Upload, FileText, File, X, CheckCircle, Clock, Brain, Scissors, Search, AlertCircle, RefreshCw, Lightbulb } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface UploadedFile {
@@ -13,8 +13,14 @@ interface UploadedFile {
   name: string;
   size: number;
   type: string;
-  status: 'uploading' | 'processing' | 'completed' | 'error';
+  status: 'uploading' | 'extracting' | 'chunking' | 'embedding' | 'completed' | 'error';
   progress: number;
+  currentStep: string;
+  wordCount?: number;
+  chunkCount?: number;
+  timeStarted?: Date;
+  errorMessage?: string;
+  suggestions?: string[];
 }
 
 export default function KnowledgeGarden() {
@@ -32,24 +38,55 @@ export default function KnowledgeGarden() {
   }, []);
 
   const simulateProcessing = useCallback((fileId: string) => {
-    const processingInterval = setInterval(() => {
-      setFiles(prev => prev.map(file => {
-        if (file.id === fileId && file.status === 'processing') {
-          const newProgress = Math.min(file.progress + 15, 100);
-          if (newProgress === 100) {
-            clearInterval(processingInterval);
-            setTimeout(() => {
-              setFiles(prev => prev.map(f => 
-                f.id === fileId ? { ...f, status: 'completed' } : f
-              ));
-            }, 500);
-            return { ...file, progress: newProgress };
-          }
-          return { ...file, progress: newProgress };
-        }
-        return file;
-      }));
-    }, 400);
+    // Step 1: Extracting
+    setTimeout(() => {
+      setFiles(prev => prev.map(f => 
+        f.id === fileId ? { 
+          ...f, 
+          status: 'extracting', 
+          progress: 25, 
+          currentStep: 'Reading document content...',
+          wordCount: Math.floor(Math.random() * 3000) + 500
+        } : f
+      ));
+    }, 800);
+
+    // Step 2: Chunking
+    setTimeout(() => {
+      setFiles(prev => prev.map(f => 
+        f.id === fileId ? { 
+          ...f, 
+          status: 'chunking', 
+          progress: 50, 
+          currentStep: 'Breaking into searchable chunks...',
+          chunkCount: Math.floor((f.wordCount || 1000) / 200)
+        } : f
+      ));
+    }, 2000);
+
+    // Step 3: Embedding
+    setTimeout(() => {
+      setFiles(prev => prev.map(f => 
+        f.id === fileId ? { 
+          ...f, 
+          status: 'embedding', 
+          progress: 85, 
+          currentStep: `Generating AI embeddings for ${f.chunkCount || 5} chunks...`
+        } : f
+      ));
+    }, 3500);
+
+    // Step 4: Completed
+    setTimeout(() => {
+      setFiles(prev => prev.map(f => 
+        f.id === fileId ? { 
+          ...f, 
+          status: 'completed', 
+          progress: 100, 
+          currentStep: 'Ready for search!'
+        } : f
+      ));
+    }, 5500);
   }, []);
 
   const simulateFileProcessing = useCallback((fileId: string) => {
@@ -57,22 +94,17 @@ export default function KnowledgeGarden() {
     const uploadInterval = setInterval(() => {
       setFiles(prev => prev.map(file => {
         if (file.id === fileId && file.status === 'uploading') {
-          const newProgress = Math.min(file.progress + 20, 100);
+          const newProgress = Math.min(file.progress + 25, 100);
           if (newProgress === 100) {
             clearInterval(uploadInterval);
-            setTimeout(() => {
-              setFiles(prev => prev.map(f => 
-                f.id === fileId ? { ...f, status: 'processing', progress: 0 } : f
-              ));
-              simulateProcessing(fileId);
-            }, 500);
-            return { ...file, progress: newProgress };
+            simulateProcessing(fileId);
+            return { ...file, progress: newProgress, currentStep: 'Upload complete!' };
           }
-          return { ...file, progress: newProgress };
+          return { ...file, progress: newProgress, currentStep: 'Uploading file...' };
         }
         return file;
       }));
-    }, 300);
+    }, 200);
   }, [simulateProcessing]);
 
   const processFiles = useCallback((fileList: File[]) => {
@@ -88,7 +120,9 @@ export default function KnowledgeGarden() {
           size: file.size,
           type: fileExtension,
           status: 'uploading',
-          progress: 0
+          progress: 0,
+          currentStep: 'Starting upload...',
+          timeStarted: new Date()
         };
         
         setFiles(prev => [...prev, newFile]);
@@ -140,18 +174,86 @@ export default function KnowledgeGarden() {
     }
   };
 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'uploading':
+        return <Upload className="h-4 w-4 text-beforest-warm-yellow animate-pulse" />;
+      case 'extracting':
+        return <Search className="h-4 w-4 text-beforest-light-blue animate-spin" />;
+      case 'chunking':
+        return <Scissors className="h-4 w-4 text-beforest-coral-orange animate-bounce" />;
+      case 'embedding':
+        return <Brain className="h-4 w-4 text-beforest-deep-blue animate-pulse" />;
+      case 'completed':
+        return <CheckCircle className="h-4 w-4 text-beforest-soft-green" />;
+      case 'error':
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Clock className="h-4 w-4 text-beforest-charcoal" />;
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'uploading':
-        return <Badge variant="secondary" className="bg-beforest-warm-yellow text-beforest-dark-earth">Uploading</Badge>;
-      case 'processing':
-        return <Badge variant="secondary" className="bg-beforest-light-blue text-beforest-deep-blue">Processing</Badge>;
+        return <Badge className="bg-beforest-warm-yellow/20 text-beforest-dark-earth border-beforest-warm-yellow">📤 Uploading</Badge>;
+      case 'extracting':
+        return <Badge className="bg-beforest-light-blue/20 text-beforest-deep-blue border-beforest-light-blue">🔍 Extracting Text</Badge>;
+      case 'chunking':
+        return <Badge className="bg-beforest-coral-orange/20 text-beforest-dark-earth border-beforest-coral-orange">✂️ Creating Chunks</Badge>;
+      case 'embedding':
+        return <Badge className="bg-beforest-deep-blue/20 text-beforest-deep-blue border-beforest-deep-blue">🧠 AI Processing</Badge>;
       case 'completed':
-        return <Badge variant="secondary" className="bg-beforest-soft-green text-beforest-forest-green">Completed</Badge>;
+        return <Badge className="bg-beforest-soft-green/20 text-beforest-forest-green border-beforest-soft-green">✅ Ready to Search</Badge>;
       case 'error':
-        return <Badge variant="destructive">Error</Badge>;
+        return <Badge variant="destructive">❌ Error</Badge>;
       default:
         return null;
+    }
+  };
+
+  const getStatusMessage = (file: UploadedFile) => {
+    const elapsed = file.timeStarted ? Math.floor((Date.now() - file.timeStarted.getTime()) / 1000) : 0;
+    
+    switch (file.status) {
+      case 'completed':
+        return (
+          <div className="space-y-1 text-xs text-beforest-forest-green">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-3 w-3" />
+              <span className="font-medium">Ready for search!</span>
+            </div>
+            <div className="text-beforest-charcoal">
+              {file.wordCount?.toLocaleString()} words • {file.chunkCount} chunks • Processed in {elapsed}s
+            </div>
+            <div className="flex items-center gap-1 text-beforest-deep-blue">
+              <Lightbulb className="h-3 w-3" />
+              <span>Try asking about this document in chat</span>
+            </div>
+          </div>
+        );
+      case 'error':
+        return (
+          <div className="space-y-2 text-xs">
+            <div className="text-red-600">{file.errorMessage || 'Processing failed'}</div>
+            {file.suggestions && (
+              <div className="space-y-1">
+                {file.suggestions.map((suggestion, idx) => (
+                  <div key={idx} className="flex items-center gap-1 text-beforest-charcoal">
+                    <Lightbulb className="h-3 w-3" />
+                    <span>{suggestion}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      default:
+        return (
+          <div className="text-xs text-beforest-charcoal">
+            {file.currentStep} {elapsed > 0 && `• ${elapsed}s elapsed`}
+          </div>
+        );
     }
   };
 
@@ -213,40 +315,62 @@ export default function KnowledgeGarden() {
           </CardHeader>
           <CardContent className="space-y-4">
             {files.map((file) => (
-              <div key={file.id} className="flex items-center space-x-4 p-4 border border-beforest-soft-gray rounded-lg">
-                <div className="flex-shrink-0">
-                  {getFileIcon(file.type)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center space-x-2">
-                    <p className="text-sm font-medium text-beforest-dark-earth truncate">
-                      {file.name}
-                    </p>
-                    {getStatusBadge(file.status)}
+              <div key={file.id} className={cn(
+                "p-4 border rounded-lg transition-all duration-300",
+                file.status === 'completed' && "border-beforest-soft-green bg-beforest-soft-green/5",
+                file.status === 'error' && "border-red-200 bg-red-50",
+                (file.status === 'uploading' || file.status === 'extracting' || file.status === 'chunking' || file.status === 'embedding') && "border-beforest-light-blue bg-beforest-light-blue/5",
+                file.status === 'uploading' && "animate-pulse"
+              )}>
+                <div className="flex items-start space-x-4">
+                  <div className="flex-shrink-0 pt-1">
+                    {getFileIcon(file.type)}
                   </div>
-                  <p className="text-xs text-beforest-charcoal">
-                    {formatFileSize(file.size)}
-                  </p>
-                  {(file.status === 'uploading' || file.status === 'processing') && (
-                    <Progress 
-                      value={file.progress} 
-                      className="mt-2 h-2"
-                    />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <p className="text-sm font-medium text-beforest-dark-earth truncate">
+                          {file.name}
+                        </p>
+                        {getStatusBadge(file.status)}
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs text-beforest-charcoal">
+                          {formatFileSize(file.size)}
+                        </span>
+                        {getStatusIcon(file.status)}
+                      </div>
+                    </div>
+                  {file.status !== 'completed' && file.status !== 'error' && (
+                    <div className="space-y-1 mt-2">
+                      <Progress 
+                        value={file.progress} 
+                        className="h-2 bg-beforest-soft-gray"
+                      />
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-beforest-charcoal">
+                          {file.progress}%
+                        </span>
+                        <span className="text-xs text-beforest-charcoal">
+                          Step {file.status === 'uploading' ? '1' : file.status === 'extracting' ? '2' : file.status === 'chunking' ? '3' : '4'} of 4
+                        </span>
+                      </div>
+                    </div>
                   )}
+                  <div className="mt-2">
+                    {getStatusMessage(file)}
+                  </div>
                 </div>
-                <div className="flex-shrink-0">
-                  {file.status === 'completed' ? (
-                    <CheckCircle className="h-5 w-5 text-beforest-soft-green" />
-                  ) : (
+                  <div className="flex-shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => removeFile(file.id)}
-                      className="h-8 w-8 p-0 hover:bg-beforest-soft-gray"
+                      className="text-beforest-charcoal hover:text-beforest-rich-red hover:bg-beforest-rich-red/10"
                     >
                       <X className="h-4 w-4" />
                     </Button>
-                  )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -270,7 +394,7 @@ export default function KnowledgeGarden() {
           <CardContent className="p-6">
             <div className="text-center">
               <p className="text-2xl font-bold text-beforest-forest-green">
-                {files.filter(f => f.status === 'processing' || f.status === 'uploading').length}
+                {files.filter(f => f.status !== 'completed' && f.status !== 'error').length}
               </p>
               <p className="text-sm text-beforest-charcoal">In Progress</p>
             </div>
