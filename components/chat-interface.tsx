@@ -128,6 +128,16 @@ const ModernMessageBubble = ({
                       h1: ({ children }) => <h1 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{children}</h1>,
                       h2: ({ children }) => <h2 className="text-base font-semibold mb-2 mt-3 first:mt-0">{children}</h2>,
                       h3: ({ children }) => <h3 className="text-sm font-semibold mb-1 mt-2 first:mt-0">{children}</h3>,
+                      table: ({ children }) => (
+                        <div className="overflow-x-auto mb-4">
+                          <table className="min-w-full border border-border rounded-lg">{children}</table>
+                        </div>
+                      ),
+                      thead: ({ children }) => <thead className="bg-muted/50">{children}</thead>,
+                      tbody: ({ children }) => <tbody>{children}</tbody>,
+                      tr: ({ children }) => <tr className="border-b border-border last:border-b-0">{children}</tr>,
+                      th: ({ children }) => <th className="px-4 py-3 text-left font-semibold text-sm">{children}</th>,
+                      td: ({ children }) => <td className="px-4 py-3 text-sm">{children}</td>,
                       strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
                       code: ({ children }) => <code className="bg-muted px-1 py-0.5 rounded text-sm">{children}</code>,
                       pre: ({ children }) => <pre className="bg-muted p-3 rounded-md overflow-x-auto mb-3">{children}</pre>,
